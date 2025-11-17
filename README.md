@@ -7,6 +7,41 @@ MCP (Model Context Protocol) server for Korean National Assembly Open API
 - FastMCP-based server implementation
 - Integration with Korean National Assembly Open API
 - Type-safe API interactions
+- Environment-based configuration
+
+## Quick Start
+
+### 1. Get API Key
+
+Get your API key from [공공데이터포털](https://www.data.go.kr/)
+
+### 2. Run with uvx
+
+```bash
+# Set API key as environment variable
+export ASSEMBLY_API_KEY="your_api_key_here"
+
+# Run MCP server
+uvx assemblymcp
+```
+
+### 3. Claude Desktop Configuration
+
+Add to your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "assembly": {
+      "command": "uvx",
+      "args": ["assemblymcp"],
+      "env": {
+        "ASSEMBLY_API_KEY": "your_api_key_here"
+      }
+    }
+  }
+}
+```
 
 ## Development
 
@@ -18,11 +53,29 @@ MCP (Model Context Protocol) server for Korean National Assembly Open API
 ### Setup
 
 ```bash
+# Clone repository
+git clone https://github.com/StatPan/AssemblyMCP.git
+cd AssemblyMCP
+
 # Install dependencies
 uv sync
 
 # Install pre-commit hooks
 uv run pre-commit install
+
+# Copy environment template
+cp .env.example .env
+# Edit .env and add your API key
+```
+
+### Running in Development
+
+```bash
+# Using uv
+uv run assemblymcp
+
+# Or with environment variable
+ASSEMBLY_API_KEY="your_key" uv run assemblymcp
 ```
 
 ### Code Quality
@@ -31,11 +84,7 @@ uv run pre-commit install
 - **pytest**: Testing framework
 - **pre-commit**: Automated code quality checks
 
-### Running
-
-```bash
-uv run python main.py
-```
+See [CONVENTIONS.md](CONVENTIONS.md) for detailed development guidelines.
 
 ## License
 
