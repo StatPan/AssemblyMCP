@@ -24,9 +24,9 @@ def main():
     """Run the MCP server"""
     # Validate settings on startup (but don't fail if API key is missing yet)
     if settings.assembly_api_key:
-        print(f"✓ API key configured: {settings.assembly_api_key[:8]}...")
+        print(f"[OK] API key configured: {settings.assembly_api_key[:8]}...")
     else:
-        print("⚠ API key not configured. Set ASSEMBLY_API_KEY environment variable.")
+        print("[WARNING] API key not configured. Set ASSEMBLY_API_KEY environment variable.")
 
     mcp.run()
 

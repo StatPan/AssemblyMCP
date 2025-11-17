@@ -1,5 +1,51 @@
 # Development Conventions
 
+## Dependency Management
+
+This project uses **uv** for all dependency management.
+
+### Adding Dependencies
+
+**ALWAYS use `uv add` command, NEVER manually edit `pyproject.toml`**
+
+```bash
+# Add production dependency
+uv add httpx
+
+# Add development dependency
+uv add --dev pytest-asyncio
+
+# Add multiple dependencies
+uv add httpx beautifulsoup4 lxml
+```
+
+### Updating Dependencies
+
+```bash
+# Update all dependencies
+uv sync --upgrade
+
+# Update specific package
+uv add httpx --upgrade
+```
+
+### Installing Project
+
+```bash
+# Install all dependencies (production + dev)
+uv sync
+
+# Install production dependencies only
+uv sync --no-dev
+```
+
+### Important
+
+**DO NOT manually edit dependencies in `pyproject.toml`**
+- Use `uv add` for adding dependencies
+- Use `uv remove` for removing dependencies
+- Let uv manage version constraints automatically
+
 ## Code Quality Tools
 
 ### Ruff
@@ -83,9 +129,13 @@ uv run pre-commit run --all-files
 ### Important
 
 **DO NOT include AI assistant attribution in commit messages**
-- ❌ No "Generated with Claude Code" or similar
-- ❌ No "Co-Authored-By: Claude" or similar
-- ✅ Keep commits professional and focused on the changes
+- No "Generated with Claude Code" or similar
+- No "Co-Authored-By: Claude" or similar
+- Keep commits professional and focused on the changes
+
+**DO NOT use emojis in commit messages, code, or documentation**
+- Keep all text professional and clean
+- Use plain text markers instead (e.g., [X], [OK], WARNING:, NOTE:)
 
 ### Examples
 
@@ -101,7 +151,7 @@ Bad:
 ```
 Added some stuff
 
-🤖 Generated with Claude Code
+Generated with Claude Code
 Co-Authored-By: Claude <noreply@anthropic.com>
 ```
 
@@ -112,6 +162,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>
 - Write docstrings for public functions and classes
 - Keep functions focused and small
 - Prefer explicit over implicit
+- **NO emojis** in code, comments, docstrings, or output messages
 
 ## Testing
 
