@@ -48,18 +48,21 @@ async def test_get_data_success(mock_env, mock_specs):
     mock_response = MagicMock()
     mock_response.status_code = 200
     mock_response.json.return_value = {
-        "TEST_ID": [
+        "test_endpoint": [
             {"head": [{"RESULT": {"CODE": "INFO-000", "MESSAGE": "Success"}}]},
             {"row": [{"data": "value"}]},
         ]
     }
     mock_response.raise_for_status = MagicMock()
 
+    # Mock get_endpoint to return a test endpoint
+    client.get_endpoint = AsyncMock(return_value="test_endpoint")
+
     # Mock the async client.get method
     client.client.get = AsyncMock(return_value=mock_response)
 
     data = await client.get_data("TEST_ID")
-    assert data["TEST_ID"][1]["row"][0]["data"] == "value"
+    assert data["test_endpoint"][1]["row"][0]["data"] == "value"
     client.client.get.assert_called_once()
 
 
@@ -70,10 +73,12 @@ async def test_get_data_error(mock_env, mock_specs):
     mock_response = MagicMock()
     mock_response.status_code = 200
     mock_response.json.return_value = {
-        "TEST_ID": [{"head": [{"RESULT": {"CODE": "INFO-300", "MESSAGE": "Error"}}]}]
+        "test_endpoint": [{"head": [{"RESULT": {"CODE": "INFO-300", "MESSAGE": "Error"}}]}]
     }
     mock_response.raise_for_status = MagicMock()
 
+    # Mock get_endpoint
+    client.get_endpoint = AsyncMock(return_value="test_endpoint")
     client.client.get = AsyncMock(return_value=mock_response)
 
     with pytest.raises(AssemblyAPIError) as exc:
