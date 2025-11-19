@@ -1,70 +1,160 @@
+import json
+import logging
 import os
+from pathlib import Path
+from typing import Any
 
 import httpx
 from dotenv import load_dotenv
+from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
-# settings 모듈이 있을 가능성이 높으므로, settings를 가정하고 작성합니다.
-# 실제로는 settings.py 파일의 내용을 확인해야 하지만, 흐름상 가정하고 진행합니다.
+# Configure logging
+logger = logging.getLogger(__name__)
+
+
+class AssemblyAPIError(Exception):
+    """Custom exception for Assembly API errors."""
+
+    def __init__(self, code: str, message: str):
+        self.code = code
+        self.message = message
+        super().__init__(f"[{code}] {message}")
+
+
+def _is_retryable_error(exception):
+    """Check if the exception is retryable."""
+    if isinstance(exception, (httpx.NetworkError, httpx.TimeoutException)):
+        return True
+    if isinstance(exception, httpx.HTTPStatusError):
+        return exception.response.status_code in [429, 500, 502, 503, 504]
+    return False
 
 
 class AssemblyAPIClient:
-    """국회 공공데이터 API 호출을 위한 기본 클라이언트."""
+    """Client for Korean National Assembly Open API."""
 
-    BASE_URL = "https://open.assembly.go.kr/portal/openapi"  # HTTPS로 수정
+    BASE_URL = "https://open.assembly.go.kr/portal/openapi"
 
     def __init__(self, api_key: str = None):
-        # settings 모듈이 없을 경우를 대비하여 환경 변수를 직접 로드하고 가져옵니다.
         load_dotenv()
         self.api_key = api_key or os.getenv("ASSEMBLY_API_KEY")
 
         if not self.api_key:
-            raise ValueError("ASSEMBLY_API_KEY가 설정되지 않았습니다.")
+            raise ValueError("ASSEMBLY_API_KEY is not set.")
 
-        # HTTPS 리디렉션 문제를 해결하기 위해 BASE_URL을 HTTPS로 변경하고
-        # follow_redirects=True를 명시합니다.
-        self.client = httpx.AsyncClient(base_url=self.BASE_URL, timeout=10.0, follow_redirects=True)
+        self.client = httpx.AsyncClient(base_url=self.BASE_URL, timeout=30.0, follow_redirects=True)
+        self.specs: dict[str, dict[str, Any]] = {}
+        self._load_specs()
 
-    async def get_data(self, service_id: str, params: dict = None):
+    def _load_specs(self):
+        """Load API specifications from specs/ directory."""
+        try:
+            current_file = Path(__file__)
+            # Go up to project root (src/client/assembly_api.py -> src/client -> src -> root)
+            project_root = current_file.parent.parent.parent
+            specs_dir = project_root / "specs"
+
+            if not specs_dir.exists():
+                logger.warning(f"Specs directory not found at {specs_dir}")
+                return
+
+            for spec_file in specs_dir.glob("all_apis_p*.json"):
+                try:
+                    with open(spec_file, encoding="utf-8") as f:
+                        data = json.load(f)
+                        if "OPENSRVAPI" in data:
+                            for item in data["OPENSRVAPI"]:
+                                if "row" in item:
+                                    for row in item["row"]:
+                                        inf_id = row.get("INF_ID")
+                                        if inf_id:
+                                            self.specs[inf_id] = row
+                except Exception as e:
+                    logger.error(f"Failed to load spec file {spec_file}: {e}")
+
+            logger.info(f"Loaded {len(self.specs)} API specs.")
+
+        except Exception as e:
+            logger.error(f"Error loading specs: {e}")
+
+    def validate_service_id(self, service_id: str) -> bool:
+        """Check if service_id exists in loaded specs."""
+        return service_id in self.specs
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception(_is_retryable_error),
+    )
+    async def get_data(
+        self, service_id: str, params: dict[str, Any] = None, fmt: str = "json"
+    ) -> dict[str, Any] | str:
         """
-        특정 서비스 ID의 API를 호출하여 데이터를 가져옵니다.
+        Fetch data from the API.
 
-        API의 공통 규격:
-        - KEY: 인증키
-        - pIndex: 페이지 번호
-        - pSize: 페이지당 건수
-        - AGE: 국회 대수
+        Args:
+            service_id: The API service ID.
+            params: Query parameters.
+            fmt: Response format ('json' or 'xml').
+
+        Returns:
+            Parsed JSON dict or raw XML string.
         """
+        if not self.validate_service_id(service_id):
+            logger.warning(f"Service ID {service_id} not found in loaded specs.")
 
-        # 최종 API 호출 구조 추정: /json/서비스ID 형태로 URL 경로를 구성하고
-        # Type 파라미터를 제거합니다.
+        url = f"/{service_id}"
+        if fmt.lower() == "json":
+            url += "/json"
+        elif fmt.lower() == "xml":
+            url += "/xml"
+
         default_params = {
             "KEY": self.api_key,
             "pIndex": 1,
-            "pSize": 100,  # 기본 100건 설정
+            "pSize": 100,
         }
-
-        # URL 경로에 서비스 ID와 JSON 타입을 포함 (최종 시도)
-        url_path = f"/{service_id}/json"
-
         merged_params = {**default_params, **(params or {})}
 
         try:
-            response = await self.client.get(url_path, params=merged_params)
+            response = await self.client.get(url, params=merged_params)
             response.raise_for_status()
 
-            # 국회 API의 특성상 JSON 구조가 중첩되어 있을 수 있습니다.
-            # 여기서는 일단 전체 JSON을 반환하고 상위 로직에서 처리하도록 합니다.
-            return response.json()
+            if fmt.lower() == "json":
+                data = response.json()
+                self._check_api_error(data, service_id)
+                return data
+            else:
+                return response.text
 
         except httpx.HTTPStatusError as e:
-            print(f"HTTP 오류 발생: {e.response.status_code} - {e.response.text}")
-            # GH_ISSUE_01.md에서 언급된 404/ERROR-310 오류 처리
-            if e.response.status_code == 404 or "ERROR-310" in e.response.text:
-                # TODO: API 호출 URL 및 파라미터 조합 테스트 필요
-                raise ConnectionError(
-                    "API 호출 URL 또는 파라미터 조합 오류 가능성 확인 필요."
-                ) from e
+            logger.error(f"HTTP error: {e.response.status_code} - {e.response.text}")
             raise
         except Exception as e:
-            print(f"API 호출 중 예외 발생: {e}")
+            logger.error(f"API request failed: {e}")
             raise
+
+    def _check_api_error(self, data: dict[str, Any], service_id: str):
+        """Check for API specific error codes."""
+        # Expected structure: { service_id: [ { "head": [ ... { "RESULT": ... } ] }, ... ] }
+        if service_id in data:
+            items = data[service_id]
+            for item in items:
+                if "head" in item:
+                    for head_item in item["head"]:
+                        if "RESULT" in head_item:
+                            result = head_item["RESULT"]
+                            code = result.get("CODE")
+                            message = result.get("MESSAGE")
+
+                            # Check for specific error codes
+                            # 290, 300, 337 are mentioned in requirements
+                            if code in ["INFO-200", "INFO-290", "INFO-300", "INFO-337"]:
+                                # These might be "No Data" or similar info codes
+                                logger.warning(f"API Result: {code} - {message}")
+
+                                # INFO-200 usually means "No Data"
+                                if code == "INFO-200":
+                                    return  # No data is valid result
+
+                                raise AssemblyAPIError(code, message)
