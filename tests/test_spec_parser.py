@@ -16,7 +16,7 @@ async def test_parse_spec_bill_api(spec_parser):
     """Test parsing spec for bill API."""
     service_id = "OK7XM1000938DS17215"
 
-    spec = spec_parser.parse_spec(service_id)
+    spec = await spec_parser.parse_spec(service_id)
 
     assert spec.service_id == service_id
     assert spec.endpoint == "nzmimeepazxkubdpn"
@@ -45,7 +45,7 @@ async def test_parse_spec_member_info_api(spec_parser):
     """Test parsing spec for member info API (no required request params)."""
     service_id = "OWSSC6001134T516707"
 
-    spec = spec_parser.parse_spec(service_id)
+    spec = await spec_parser.parse_spec(service_id)
 
     assert spec.service_id == service_id
     assert spec.endpoint == "nwvrqwxyaytdsfvhu"
@@ -60,7 +60,7 @@ async def test_parse_spec_meeting_record_api(spec_parser):
     """Test parsing spec for meeting record API (multiple required params)."""
     service_id = "OO1X9P001017YF13038"
 
-    spec = spec_parser.parse_spec(service_id)
+    spec = await spec_parser.parse_spec(service_id)
 
     assert spec.service_id == service_id
     assert spec.endpoint == "nzbyfwhwaoanttzje"
@@ -77,10 +77,10 @@ async def test_spec_caching(spec_parser):
     service_id = "OK7XM1000938DS17215"
 
     # First parse - should download
-    spec1 = spec_parser.parse_spec(service_id)
+    spec1 = await spec_parser.parse_spec(service_id)
 
     # Second parse - should use cache
-    spec2 = spec_parser.parse_spec(service_id)
+    spec2 = await spec_parser.parse_spec(service_id)
 
     assert spec1.endpoint == spec2.endpoint
     assert spec1.service_id == spec2.service_id
@@ -92,7 +92,7 @@ async def test_clear_cache(spec_parser):
     service_id = "OK7XM1000938DS17215"
 
     # Parse to populate cache
-    spec_parser.parse_spec(service_id)
+    await spec_parser.parse_spec(service_id)
 
     # Clear specific cache
     spec_parser.clear_cache(service_id)
@@ -107,7 +107,7 @@ async def test_parse_old_api_spec(spec_parser):
     """Test parsing old API from 2019."""
     service_id = "OC0RRQ000852J210654"
 
-    spec = spec_parser.parse_spec(service_id)
+    spec = await spec_parser.parse_spec(service_id)
 
     assert spec.service_id == service_id
     assert spec.endpoint == "nhllwdafacadantme"
@@ -119,7 +119,7 @@ async def test_parse_recent_api_spec(spec_parser):
     """Test parsing recent API from 2025."""
     service_id = "OU8JBT0015343C14378"
 
-    spec = spec_parser.parse_spec(service_id)
+    spec = await spec_parser.parse_spec(service_id)
 
     assert spec.service_id == service_id
     assert spec.endpoint == "nkimylolanvseqagq"

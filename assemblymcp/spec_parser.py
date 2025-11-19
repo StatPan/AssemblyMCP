@@ -1,6 +1,8 @@
 """Parser for Korean National Assembly API Excel specifications."""
 
+import asyncio
 import logging
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -45,12 +47,12 @@ class SpecParser:
         Initialize the spec parser.
 
         Args:
-            cache_dir: Directory to cache downloaded Excel files. If None, uses /tmp.
+            cache_dir: Directory to cache downloaded Excel files. If None, uses system temp dir.
         """
-        self.cache_dir = cache_dir or Path("/tmp/assembly_specs")
+        self.cache_dir = cache_dir or Path(tempfile.gettempdir()) / "assembly_specs"
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-    def download_spec(self, service_id: str, inf_seq: int = 2) -> Path:
+    async def download_spec(self, service_id: str, inf_seq: int = 2) -> Path:
         """
         Download Excel specification file for a service.
 
@@ -76,25 +78,28 @@ class SpecParser:
 
         try:
             headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-            response = httpx.get(url, headers=headers, timeout=30.0, follow_redirects=True)
-            response.raise_for_status()
+            async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+                response = await client.get(url, headers=headers)
+                response.raise_for_status()
 
-            if len(response.content) < 100:
-                raise SpecParseError(
-                    f"Downloaded file too small ({len(response.content)} bytes): {response.content}"
-                )
+                if len(response.content) < 100:
+                    content_preview = response.content[:50]
+                    raise SpecParseError(
+                        f"Downloaded file too small ({len(response.content)} bytes): "
+                        f"{content_preview}"
+                    )
 
-            # Save to cache
-            with open(cache_file, "wb") as f:
-                f.write(response.content)
+                # Save to cache
+                with open(cache_file, "wb") as f:
+                    f.write(response.content)
 
-            logger.info(f"Downloaded spec for {service_id} ({len(response.content)} bytes)")
-            return cache_file
+                logger.info(f"Downloaded spec for {service_id} ({len(response.content)} bytes)")
+                return cache_file
 
         except httpx.HTTPError as e:
             raise SpecParseError(f"Failed to download spec for {service_id}: {e}") from e
 
-    def parse_spec(self, service_id: str) -> APISpec:
+    async def parse_spec(self, service_id: str) -> APISpec:
         """
         Parse Excel specification file to extract API details.
 
@@ -107,69 +112,72 @@ class SpecParser:
         Raises:
             SpecParseError: If parsing fails
         """
-        spec_file = self.download_spec(service_id)
+        spec_file = await self.download_spec(service_id)
 
-        try:
-            wb = openpyxl.load_workbook(spec_file)
-            ws = wb["Sheet1"]
+        def _parse_sync():
+            try:
+                wb = openpyxl.load_workbook(spec_file)
+                ws = wb["Sheet1"]
 
-            # Extract endpoint URL
-            endpoint_url = self._extract_endpoint_url(ws)
-            if not endpoint_url:
-                raise SpecParseError(f"Could not find endpoint URL in spec for {service_id}")
+                # Extract endpoint URL
+                endpoint_url = self._extract_endpoint_url(ws)
+                if not endpoint_url:
+                    raise SpecParseError(f"Could not find endpoint URL in spec for {service_id}")
 
-            endpoint = endpoint_url.split("/")[-1]
+                endpoint = endpoint_url.split("/")[-1]
 
-            # Extract parameters
-            basic_params = []
-            request_params = []
+                # Extract parameters
+                basic_params = []
+                request_params = []
 
-            in_basic_section = False
-            in_request_section = False
+                in_basic_section = False
+                in_request_section = False
 
-            for row in ws.iter_rows(min_row=1, max_row=100, values_only=True):
-                if not row or not any(row):
-                    continue
+                for row in ws.iter_rows(min_row=1, values_only=True):
+                    if not row or not any(row):
+                        continue
 
-                first_cell = str(row[0]) if row[0] else ""
+                    first_cell = str(row[0]) if row[0] else ""
 
-                # Check section markers
-                if "기본인자" in first_cell:
-                    in_basic_section = True
-                    in_request_section = False
-                    continue
-                elif "요청인자" in first_cell:
-                    in_basic_section = False
-                    in_request_section = True
-                    continue
-                elif "출력값" in first_cell or "출력명" in first_cell:
-                    break
+                    # Check section markers
+                    if "기본인자" in first_cell:
+                        in_basic_section = True
+                        in_request_section = False
+                        continue
+                    elif "요청인자" in first_cell:
+                        in_basic_section = False
+                        in_request_section = True
+                        continue
+                    elif "출력값" in first_cell or "출력명" in first_cell:
+                        break
 
-                # Parse parameter rows
-                if (in_basic_section or in_request_section) and len(row) >= 3 and row[1]:
-                    type_str = str(row[1])
-                    if "필수" in type_str or "선택" in type_str:
-                        param = APIParameter(
-                            name=str(row[0]),
-                            type=type_str,
-                            required="필수" in type_str,
-                            description=str(row[2]) if row[2] else "",
-                        )
-                        if in_basic_section:
-                            basic_params.append(param)
-                        else:
-                            request_params.append(param)
+                    # Parse parameter rows
+                    if (in_basic_section or in_request_section) and len(row) >= 3 and row[1]:
+                        type_str = str(row[1])
+                        if "필수" in type_str or "선택" in type_str:
+                            param = APIParameter(
+                                name=str(row[0]),
+                                type=type_str,
+                                required="필수" in type_str,
+                                description=str(row[2]) if row[2] else "",
+                            )
+                            if in_basic_section:
+                                basic_params.append(param)
+                            else:
+                                request_params.append(param)
 
-            return APISpec(
-                service_id=service_id,
-                endpoint=endpoint,
-                endpoint_url=endpoint_url,
-                basic_params=basic_params,
-                request_params=request_params,
-            )
+                return APISpec(
+                    service_id=service_id,
+                    endpoint=endpoint,
+                    endpoint_url=endpoint_url,
+                    basic_params=basic_params,
+                    request_params=request_params,
+                )
 
-        except Exception as e:
-            raise SpecParseError(f"Failed to parse spec for {service_id}: {e}") from e
+            except (openpyxl.utils.exceptions.InvalidFileException, KeyError, IndexError) as e:
+                raise SpecParseError(f"Failed to parse spec for {service_id}: {e}") from e
+
+        return await asyncio.to_thread(_parse_sync)
 
     def _extract_endpoint_url(self, worksheet) -> str | None:
         """
@@ -181,13 +189,13 @@ class SpecParser:
         Returns:
             Endpoint URL or None if not found
         """
-        for i in range(1, 30):
-            cell_value = worksheet.cell(i, 1).value
-            if cell_value and "요청주소" in str(cell_value):
+        for row in worksheet.iter_rows(min_row=1, max_row=50, max_col=1):
+            cell = row[0]
+            if cell.value and "요청주소" in str(cell.value):
                 # Next row should contain the URL
-                next_row = worksheet.cell(i + 1, 1).value
-                if next_row and "https://" in str(next_row):
-                    url = str(next_row).strip().replace("- ", "")
+                next_row_value = worksheet.cell(cell.row + 1, 1).value
+                if next_row_value and "https://" in str(next_row_value):
+                    url = str(next_row_value).strip().replace("- ", "")
                     return url
         return None
 

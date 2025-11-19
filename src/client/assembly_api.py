@@ -85,7 +85,7 @@ class AssemblyAPIClient:
         """Check if service_id exists in loaded specs."""
         return service_id in self.specs
 
-    def get_endpoint(self, service_id: str) -> str:
+    async def get_endpoint(self, service_id: str) -> str:
         """
         Get the actual API endpoint for a service ID.
 
@@ -100,7 +100,7 @@ class AssemblyAPIClient:
         """
         if service_id not in self.parsed_specs:
             logger.info(f"Parsing spec for {service_id}")
-            spec = self.spec_parser.parse_spec(service_id)
+            spec = await self.spec_parser.parse_spec(service_id)
             self.parsed_specs[service_id] = spec
 
         return self.parsed_specs[service_id].endpoint
@@ -133,7 +133,7 @@ class AssemblyAPIClient:
 
         # Get actual endpoint from Excel spec
         try:
-            endpoint = self.get_endpoint(service_id)
+            endpoint = await self.get_endpoint(service_id)
         except SpecParseError as e:
             logger.error(f"Failed to get endpoint for {service_id}: {e}")
             raise
