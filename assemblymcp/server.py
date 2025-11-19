@@ -1,14 +1,18 @@
 """MCP Server for Korean National Assembly API"""
 
 import json
+import logging
 from datetime import date, datetime
 
 from fastmcp import FastMCP
 
-from assemblymcp.client import AssemblyAPIClient
+from assemblymcp.client import AssemblyAPIClient, AssemblyAPIError
 from assemblymcp.models import Bill
 from assemblymcp.services import DiscoveryService
 from assemblymcp.settings import settings
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 # Initialize FastMCP server
 mcp = FastMCP("AssemblyMCP")
@@ -71,9 +75,12 @@ async def call_api_raw(service_id: str, params: str = "{}") -> str:
     try:
         data = await discovery_service.call_raw(service_id=service_id, params=param_dict)
         return json.dumps(data, ensure_ascii=False, indent=2)
-    except Exception as e:
-        print(f"Error calling API service '{service_id}': {e}")
-        return f"Error calling API: {e}"
+    except AssemblyAPIError as e:
+        logger.error(f"API error calling service '{service_id}': {e}")
+        return f"API Error: {e}"
+    except Exception:
+        logger.exception(f"Unexpected error calling API service '{service_id}'")
+        return "An unexpected error occurred."
 
 
 @mcp.tool(name="get_latest_bills")
