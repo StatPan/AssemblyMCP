@@ -2,7 +2,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.services.discovery_service import DiscoveryService
+from assemblymcp.services import DiscoveryService
 
 # Sample specs for testing
 SAMPLE_SPECS = {

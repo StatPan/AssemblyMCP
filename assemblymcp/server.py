@@ -5,10 +5,10 @@ from datetime import date, datetime
 
 from fastmcp import FastMCP
 
+from assemblymcp.client import AssemblyAPIClient
+from assemblymcp.models import Bill
+from assemblymcp.services import DiscoveryService
 from assemblymcp.settings import settings
-from src.client.assembly_api import AssemblyAPIClient
-from src.models.bill import Bill
-from src.services.discovery_service import DiscoveryService
 
 # Initialize FastMCP server
 mcp = FastMCP("AssemblyMCP")

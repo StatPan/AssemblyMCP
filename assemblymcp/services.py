@@ -1,6 +1,6 @@
 from typing import Any
 
-from src.client.assembly_api import AssemblyAPIClient
+from assemblymcp.client import AssemblyAPIClient
 
 
 class DiscoveryService:

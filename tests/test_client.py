@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, mock_open, patch
 
 import pytest
 
-from src.client.assembly_api import AssemblyAPIClient, AssemblyAPIError
+from assemblymcp.client import AssemblyAPIClient, AssemblyAPIError
 
 SAMPLE_SPEC = {"OPENSRVAPI": [{"row": [{"INF_ID": "TEST_ID", "INF_NM": "Test Service"}]}]}
 
