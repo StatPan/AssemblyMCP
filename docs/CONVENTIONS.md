@@ -99,6 +99,30 @@ Automated code quality checks before commits
 uv run pre-commit run --all-files
 ```
 
+## Branch Naming
+
+### Format
+
+```
+<type>/<issue-number>-<description>
+```
+
+### Types
+
+Same as commit types (feat, fix, docs, style, refactor, test, chore).
+
+### Guidelines
+
+- Always include the issue number
+- Use lowercase and hyphens for description
+- Keep it short and descriptive
+
+### Examples
+
+- `feat/13-discovery-tools`
+- `fix/42-login-error`
+- `docs/10-update-readme`
+
 ## Git Commit Messages
 
 ### Format
