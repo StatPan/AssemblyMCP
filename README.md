@@ -1,6 +1,8 @@
 # AssemblyMCP
 
-MCP (Model Context Protocol) server for Korean National Assembly Open API
+MCP (Model Context Protocol) server for Korean National Assembly Open API. (Currently in **BETA** stage.)
+
+See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for a high-level overview of the design.
 
 ## Features
 
@@ -85,6 +87,10 @@ ASSEMBLY_API_KEY="your_key" uv run assemblymcp
 - **pre-commit**: Automated code quality checks
 
 See [CONVENTIONS.md](CONVENTIONS.md) for detailed development guidelines.
+
+## Contributing
+
+We welcome contributions! Please see [CONVENTIONS.md](docs/CONVENTIONS.md) for coding standards, setup instructions, and the process for submitting pull requests.
 
 ## License
 
