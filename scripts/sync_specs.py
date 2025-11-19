@@ -9,20 +9,18 @@ import asyncio
 import json
 import logging
 import os
-import sys
 from pathlib import Path
 
 import httpx
 from dotenv import load_dotenv
 
+from assemblymcp.spec_parser import SpecParser
+
 # Load environment variables
 load_dotenv()
 
-# Add project root to path
+# Project root for spec file paths
 project_root = Path(__file__).parent.parent
-sys.path.append(str(project_root))
-
-from assemblymcp.spec_parser import SpecParser  # noqa: E402
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -51,8 +49,8 @@ async def fetch_master_list(api_key: str, parser: SpecParser) -> list[dict]:
         master_endpoint = spec.endpoint
         logger.info(f"Resolved Master List Endpoint: {master_endpoint}")
     except Exception as e:
-        logger.error(f"Failed to resolve master list endpoint: {e}")
-        return []
+        logger.error(f"Failed to resolve master list endpoint: {e}", exc_info=True)
+        raise
 
     all_rows = []
     p_index = 1

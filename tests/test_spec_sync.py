@@ -29,6 +29,9 @@ async def test_download_if_changed_new_file(spec_parser):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.content = content
+        mock_response.headers = {
+            "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        }
         mock_get.return_value = mock_response
 
         updated = await spec_parser.download_if_changed(service_id)
@@ -51,6 +54,9 @@ async def test_download_if_changed_unchanged(spec_parser):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.content = content
+        mock_response.headers = {
+            "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        }
         mock_get.return_value = mock_response
 
         updated = await spec_parser.download_if_changed(service_id)
@@ -73,7 +79,16 @@ async def test_download_if_changed_updated(spec_parser):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.content = new_content
+        mock_response.headers = {
+            "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        }
         mock_get.return_value = mock_response
+
+        updated = await spec_parser.download_if_changed(service_id)
+
+        assert updated is True
+        assert cache_file.exists()
+        assert cache_file.read_bytes() == new_content
 
 
 @pytest.mark.asyncio

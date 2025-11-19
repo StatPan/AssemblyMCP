@@ -178,6 +178,14 @@ class SpecParser:
                 response = await client.get(url, headers=headers)
                 response.raise_for_status()
 
+                # Check for correct content type before saving
+                content_type = response.headers.get("Content-Type", "")
+                if "spreadsheetml" not in content_type:
+                    raise SpecParseError(
+                        f"Unexpected content type for {service_id}: {content_type}. "
+                        f"Expected Excel file."
+                    )
+
                 if len(response.content) < 100:
                     raise SpecParseError(
                         f"Downloaded file too small: {len(response.content)} bytes"

@@ -50,7 +50,7 @@ class AssemblyAPIClient:
         # Default to specs/excel if not provided
         if spec_cache_dir is None:
             current_file = Path(__file__)
-            project_root = current_file.parent.parent.parent
+            project_root = current_file.parent.parent
             spec_cache_dir = project_root / "specs" / "excel"
 
         self.spec_parser = SpecParser(cache_dir=spec_cache_dir)
@@ -61,7 +61,7 @@ class AssemblyAPIClient:
         """Load API specifications from specs/ directory."""
         try:
             current_file = Path(__file__)
-            project_root = current_file.parent.parent.parent
+            project_root = current_file.parent.parent
             specs_dir = project_root / "specs"
 
             if not specs_dir.exists():
