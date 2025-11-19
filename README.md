@@ -100,6 +100,10 @@ See [CONVENTIONS.md](docs/CONVENTIONS.md) for detailed development guidelines.
 
 We welcome contributions! Please see [CONVENTIONS.md](docs/CONVENTIONS.md) for coding standards, setup instructions, and the process for submitting pull requests.
 
+## Contributing
+
+We welcome contributions! Please see [CONVENTIONS.md](docs/CONVENTIONS.md) for coding standards, setup instructions, and the process for submitting pull requests.
+
 ## License
 
 MIT
