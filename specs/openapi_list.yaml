@@ -1,0 +1,84 @@
+endpoint: OPENSRVAPI
+description: 국회 OpenAPI 전체 현황 정보 조회
+base_url: https://open.assembly.go.kr/portal/openapi/OPENSRVAPI
+rate_limit: unlimited
+
+parameters:
+  required:
+    KEY:
+      type: STRING
+      description: 인증키
+      default: sample key
+    Type:
+      type: STRING
+      description: 호출 문서(xml, json)
+      default: xml
+      enum: [xml, json]
+    pIndex:
+      type: INTEGER
+      description: 페이지 위치
+      default: 1
+      note: sample key는 1 고정
+    pSize:
+      type: INTEGER
+      description: 페이지 당 요청 숫자
+      default: 100
+      note: sample key는 5 고정
+      max: 1000
+
+  optional:
+    INF_ID:
+      type: STRING
+      description: 공공데이터ID
+    INF_NM:
+      type: STRING
+      description: 공공데이터명
+    SRC_EXP:
+      type: STRING
+      description: 원본시스템
+
+response:
+  fields:
+    - name: INF_ID
+      description: 공공데이터ID
+    - name: INF_NM
+      description: 공공데이터명
+    - name: INF_EXP
+      description: 공공데이터설명
+    - name: CATE_NM
+      description: 분류체계
+    - name: OPEN_DTTM
+      description: 공개일자
+    - name: ORG_NM
+      description: 제공기관
+    - name: LOAD_DTTM
+      description: 최종수정일자
+    - name: SRC_EXP
+      description: 원본시스템
+    - name: DDC_URL
+      description: 명세서URL
+    - name: SRV_URL
+      description: 서비스URL
+    - name: CCL_NM
+      description: 이용허락조건
+    - name: LOAD_NM
+      description: 공개주기
+    - name: LOAD_CONT
+      description: 공개시기
+
+error_codes:
+  300: 필수 값이 누락되어 있습니다. 요청인자를 참고 하십시오.
+  290: 인증키가 유효하지 않습니다. 인증키가 없는 경우, 홈페이지에서 인증키를 신청하십시오.
+  337: 일별 트래픽 제한을 넘은 호출입니다. 오늘은 더이상 호출할 수 없습니다.
+  310: 해당하는 서비스를 찾을 수 없습니다. 요청인자 중 SERVICE를 확인하십시오.
+  333: 요청위치 값의 타입이 유효하지 않습니다.요청위치 값은 정수를 입력하세요.
+  336: 데이터요청은 한번에 최대 1,000건을 넘을 수 없습니다.
+  500: 서버 오류입니다. 지속적으로 발생시 홈페이지로 문의(Q&A) 바랍니다.
+  600: 데이터베이스 연결 오류입니다. 지속적으로 발생시 홈페이지로 문의(Q&A) 바랍니다.
+  601: SQL 문장 오류 입니다. 지속적으로 발생시 홈페이지로 문의(Q&A) 바랍니다.
+  990: 인증서가 폐기되었습니다.홈페이지에서 인증키를 확인하십시오.
+
+info_codes:
+  "000": 정상 처리되었습니다.
+  300: 관리자에 의해 인증키 사용이 제한되었습니다.
+  200: 해당하는 데이터가 없습니다.

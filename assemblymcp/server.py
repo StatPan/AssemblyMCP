@@ -1,8 +1,12 @@
 """MCP Server for Korean National Assembly API"""
 
+from datetime import date, datetime
+
 from fastmcp import FastMCP
 
 from assemblymcp.settings import settings
+from src.client.assembly_api import AssemblyAPIClient
+from src.models.bill import Bill
 
 # Initialize FastMCP server
 mcp = FastMCP("AssemblyMCP")
@@ -18,6 +22,76 @@ async def get_assembly_info() -> str:
     """
     api_key_status = "configured" if settings.assembly_api_key else "not configured"
     return f"Korean National Assembly Open API MCP Server\nAPI Key: {api_key_status}"
+
+
+@mcp.tool(name="get_latest_bills")
+async def get_latest_bills(size: int = 10, proposer_name: str | None = None) -> list[Bill]:
+    """
+    국회의원 발의법률안 데이터를 최신순으로 조회합니다.
+
+    Args:
+        size: 조회할 법률안의 최대 개수 (최대 100).
+        proposer_name: 제안한 국회의원의 이름으로 필터링 (전체 이름 일치).
+
+    Returns:
+        조회된 법률안(Bill) 목록.
+    """
+
+    # 1. 클라이언트 초기화 및 API 파라미터 준비
+    client = AssemblyAPIClient(api_key=settings.assembly_api_key)
+    service_id = "OK7XM1000938DS17215"
+    params = {
+        "pSize": min(size, 100),  # 최대 100건 제한
+        "pIndex": 1,
+    }
+
+    if proposer_name:
+        # API 문서에 따라 'PROPOSER' 파라미터로 필터링을 시도 (확인 필요)
+        params["PROPOSER"] = proposer_name
+
+    # 2. API 호출
+    try:
+        raw_data = await client.get_data(service_id=service_id, params=params)
+    except Exception as e:
+        # 오류가 발생하면 빈 목록이나 적절한 오류 메시지를 반환
+        print(f"API 호출 실패: {e}")
+        return []
+
+    # 3. 데이터 정제 및 Bill 모델 변환
+    bill_list = []
+
+    # 임시 데이터 추출 로직 (추정) - 실제 API 응답 구조를 파악하면 업데이트 필요
+    try:
+        # API 서비스 ID와 동일한 키를 가진 리스트를 찾습니다.
+        results = raw_data.get(service_id, [])
+        if len(results) >= 1 and "row" in results[1]:
+            rows = results[1]["row"]
+            for row in rows:
+                # 날짜 형식 변환을 위한 임시 함수
+                def to_date(dt_str: str | None) -> date | None:
+                    if dt_str and len(dt_str) == 8:
+                        try:
+                            return datetime.strptime(dt_str, "%Y%m%d").date()
+                        except ValueError:
+                            pass
+                    return None
+
+                bill = Bill(
+                    bill_no=row.get("BILL_NO", ""),
+                    bill_name=row.get("BILL_NAME", ""),
+                    propose_dt=to_date(row.get("PROPOSE_DT")),
+                    proposer_gbn_nm=row.get("PROPOSER_GBN_NM", ""),
+                    committee_dt=to_date(row.get("COMMITTEE_DT")),
+                    proc_result_cd=row.get("PROC_RESULT_CD"),
+                    link_url=row.get("LINK_URL"),
+                )
+                bill_list.append(bill)
+
+    except Exception as e:
+        print(f"데이터 정제 중 오류 발생: {e}")
+        return []
+
+    return bill_list
 
 
 def main():
