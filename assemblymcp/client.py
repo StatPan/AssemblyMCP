@@ -8,7 +8,7 @@ import httpx
 from dotenv import load_dotenv
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
-from assemblymcp.spec_parser import APISpec, SpecParseError, SpecParser
+from .spec_parser import APISpec, SpecParseError, SpecParser
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -46,6 +46,13 @@ class AssemblyAPIClient:
 
         self.client = httpx.AsyncClient(timeout=30.0, follow_redirects=True)
         self.specs: dict[str, dict[str, Any]] = {}
+
+        # Default to specs/excel if not provided
+        if spec_cache_dir is None:
+            current_file = Path(__file__)
+            project_root = current_file.parent.parent.parent
+            spec_cache_dir = project_root / "specs" / "excel"
+
         self.spec_parser = SpecParser(cache_dir=spec_cache_dir)
         self.parsed_specs: dict[str, APISpec] = {}
         self._load_specs()
@@ -54,7 +61,6 @@ class AssemblyAPIClient:
         """Load API specifications from specs/ directory."""
         try:
             current_file = Path(__file__)
-            # Go up to project root (src/client/assembly_api.py -> src/client -> src -> root)
             project_root = current_file.parent.parent.parent
             specs_dir = project_root / "specs"
 
@@ -62,9 +68,11 @@ class AssemblyAPIClient:
                 logger.warning(f"Specs directory not found at {specs_dir}")
                 return
 
-            for spec_file in specs_dir.glob("all_apis_p*.json"):
+            # 1. Load Master List (all_apis.json)
+            master_file = specs_dir / "all_apis.json"
+            if master_file.exists():
                 try:
-                    with open(spec_file, encoding="utf-8") as f:
+                    with open(master_file, encoding="utf-8") as f:
                         data = json.load(f)
                         if "OPENSRVAPI" in data:
                             for item in data["OPENSRVAPI"]:
@@ -74,9 +82,24 @@ class AssemblyAPIClient:
                                         if inf_id:
                                             self.specs[inf_id] = row
                 except Exception as e:
-                    logger.error(f"Failed to load spec file {spec_file}: {e}")
+                    logger.error(f"Failed to load master list {master_file}: {e}")
 
-            logger.info(f"Loaded {len(self.specs)} API specs.")
+            # 2. Load Parsed Specs from JSON (specs/json/*.json)
+            json_dir = specs_dir / "json"
+            if json_dir.exists():
+                for json_file in json_dir.glob("*.json"):
+                    try:
+                        with open(json_file, encoding="utf-8") as f:
+                            data = json.load(f)
+                            spec = APISpec.from_dict(data)
+                            self.parsed_specs[spec.service_id] = spec
+                    except Exception as e:
+                        logger.error(f"Failed to load JSON spec {json_file}: {e}")
+
+            logger.info(
+                f"Loaded {len(self.specs)} API definitions and "
+                f"{len(self.parsed_specs)} parsed specs."
+            )
 
         except Exception as e:
             logger.error(f"Error loading specs: {e}")
