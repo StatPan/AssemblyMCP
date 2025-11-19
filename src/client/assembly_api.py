@@ -8,6 +8,8 @@ import httpx
 from dotenv import load_dotenv
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
+from assemblymcp.spec_parser import APISpec, SpecParseError, SpecParser
+
 # Configure logging
 logger = logging.getLogger(__name__)
 
@@ -35,15 +37,17 @@ class AssemblyAPIClient:
 
     BASE_URL = "https://open.assembly.go.kr/portal/openapi"
 
-    def __init__(self, api_key: str = None):
+    def __init__(self, api_key: str = None, spec_cache_dir: Path | None = None):
         load_dotenv()
         self.api_key = api_key or os.getenv("ASSEMBLY_API_KEY")
 
         if not self.api_key:
             raise ValueError("ASSEMBLY_API_KEY is not set.")
 
-        self.client = httpx.AsyncClient(base_url=self.BASE_URL, timeout=30.0, follow_redirects=True)
+        self.client = httpx.AsyncClient(timeout=30.0, follow_redirects=True)
         self.specs: dict[str, dict[str, Any]] = {}
+        self.spec_parser = SpecParser(cache_dir=spec_cache_dir)
+        self.parsed_specs: dict[str, APISpec] = {}
         self._load_specs()
 
     def _load_specs(self):
@@ -81,6 +85,26 @@ class AssemblyAPIClient:
         """Check if service_id exists in loaded specs."""
         return service_id in self.specs
 
+    def get_endpoint(self, service_id: str) -> str:
+        """
+        Get the actual API endpoint for a service ID.
+
+        Args:
+            service_id: The service ID
+
+        Returns:
+            The endpoint string
+
+        Raises:
+            SpecParseError: If spec parsing fails
+        """
+        if service_id not in self.parsed_specs:
+            logger.info(f"Parsing spec for {service_id}")
+            spec = self.spec_parser.parse_spec(service_id)
+            self.parsed_specs[service_id] = spec
+
+        return self.parsed_specs[service_id].endpoint
+
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=10),
@@ -90,27 +114,37 @@ class AssemblyAPIClient:
         self, service_id: str, params: dict[str, Any] = None, fmt: str = "json"
     ) -> dict[str, Any] | str:
         """
-        Fetch data from the API.
+        Fetch data from the API using dynamic endpoint resolution.
 
         Args:
-            service_id: The API service ID.
+            service_id: The API service ID (e.g., 'OK7XM1000938DS17215').
             params: Query parameters.
             fmt: Response format ('json' or 'xml').
 
         Returns:
             Parsed JSON dict or raw XML string.
+
+        Raises:
+            SpecParseError: If endpoint resolution fails
+            AssemblyAPIError: If API returns an error
         """
         if not self.validate_service_id(service_id):
             logger.warning(f"Service ID {service_id} not found in loaded specs.")
 
-        url = f"/{service_id}"
-        if fmt.lower() == "json":
-            url += "/json"
-        elif fmt.lower() == "xml":
-            url += "/xml"
+        # Get actual endpoint from Excel spec
+        try:
+            endpoint = self.get_endpoint(service_id)
+        except SpecParseError as e:
+            logger.error(f"Failed to get endpoint for {service_id}: {e}")
+            raise
 
+        # Build URL with actual endpoint
+        url = f"{self.BASE_URL}/{endpoint}"
+
+        # Add format parameter using Type param (not URL path)
         default_params = {
             "KEY": self.api_key,
+            "Type": fmt.lower(),
             "pIndex": 1,
             "pSize": 100,
         }
@@ -122,7 +156,7 @@ class AssemblyAPIClient:
 
             if fmt.lower() == "json":
                 data = response.json()
-                self._check_api_error(data, service_id)
+                self._check_api_error(data, endpoint)
                 return data
             else:
                 return response.text
