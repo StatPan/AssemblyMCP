@@ -49,6 +49,13 @@ async def test_list_services_filter(discovery_service):
 
 
 @pytest.mark.asyncio
+async def test_list_services_filter_case_insensitive(discovery_service):
+    results = await discovery_service.list_services(keyword="member")
+    assert len(results) == 1
+    assert results[0]["id"] == "TEST_ID_2"
+
+
+@pytest.mark.asyncio
 async def test_call_raw_success(discovery_service, mock_client):
     mock_client.get_data = AsyncMock(return_value={"result": "success"})
 

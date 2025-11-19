@@ -72,6 +72,7 @@ async def call_api_raw(service_id: str, params: str = "{}") -> str:
         data = await discovery_service.call_raw(service_id=service_id, params=param_dict)
         return json.dumps(data, ensure_ascii=False, indent=2)
     except Exception as e:
+        print(f"Error calling API service '{service_id}': {e}")
         return f"Error calling API: {e}"
 
 
