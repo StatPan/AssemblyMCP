@@ -1,12 +1,16 @@
 # AssemblyMCP
 
-MCP (Model Context Protocol) server for Korean National Assembly Open API
+MCP (Model Context Protocol) server for Korean National Assembly Open API. (Currently in **BETA** stage.)
+
+See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for a high-level overview of the design.
 
 ## Features
 
 - FastMCP-based server implementation
 - Integration with Korean National Assembly Open API
+- **Dynamic API endpoint resolution** via Excel spec parsing
 - Type-safe API interactions
+- Automatic spec caching for performance
 - Environment-based configuration
 
 ## Quick Start
@@ -84,7 +88,17 @@ ASSEMBLY_API_KEY="your_key" uv run assemblymcp
 - **pytest**: Testing framework
 - **pre-commit**: Automated code quality checks
 
-See [CONVENTIONS.md](CONVENTIONS.md) for detailed development guidelines.
+See [CONVENTIONS.md](docs/CONVENTIONS.md) for detailed development guidelines.
+
+## Documentation
+
+- [ARCHITECTURE.md](docs/ARCHITECTURE.md) - High-level architecture and design decisions
+- [SPEC_PARSER.md](docs/SPEC_PARSER.md) - Excel spec parser documentation
+- [CONVENTIONS.md](docs/CONVENTIONS.md) - Development conventions and guidelines
+
+## Contributing
+
+We welcome contributions! Please see [CONVENTIONS.md](docs/CONVENTIONS.md) for coding standards, setup instructions, and the process for submitting pull requests.
 
 ## License
 
