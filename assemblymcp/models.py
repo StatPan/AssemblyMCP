@@ -35,6 +35,7 @@ class Bill(BaseModel):
     # 원시 API 데이터의 필드명과 모델 필드명을 매핑하는 별칭.
     # 국회 API에서 가져온 데이터를 이 모델로 변환할 때 사용될 수 있습니다.
     model_config = {
+        "json_schema_serialization_defaults_required": True,
         "json_schema_extra": {
             "example": {
                 "bill_id": "2100001",
@@ -48,5 +49,5 @@ class Bill(BaseModel):
                 "proc_dt": None,
                 "link_url": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_C0Y0T0T0M0X0A1F0H1P5V7G6R2Q5Z2",
             }
-        }
+        },
     }
