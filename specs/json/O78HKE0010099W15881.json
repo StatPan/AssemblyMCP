@@ -1,0 +1,75 @@
+{
+  "service_id": "O78HKE0010099W15881",
+  "endpoint": "numwhtqhavaqssfle",
+  "endpoint_url": "https://open.assembly.go.kr/portal/openapi/numwhtqhavaqssfle",
+  "basic_params": [
+    {
+      "name": "Key",
+      "type": "STRING(필수)",
+      "required": true,
+      "description": "인증키"
+    },
+    {
+      "name": "Type",
+      "type": "STRING(필수)",
+      "required": true,
+      "description": "호출 문서(xml, json)"
+    },
+    {
+      "name": "pIndex",
+      "type": "INTEGER(필수)",
+      "required": true,
+      "description": "페이지 위치"
+    },
+    {
+      "name": "pSize",
+      "type": "INTEGER(필수)",
+      "required": true,
+      "description": "페이지 당 요청 숫자"
+    }
+  ],
+  "request_params": [
+    {
+      "name": "REGDAESU",
+      "type": "STRING(필수)",
+      "required": true,
+      "description": "대수"
+    },
+    {
+      "name": "RE_TOPIC_NAME",
+      "type": "STRING(선택)",
+      "required": false,
+      "description": "분야별"
+    },
+    {
+      "name": "RE_NAME",
+      "type": "STRING(선택)",
+      "required": false,
+      "description": "연구단체"
+    },
+    {
+      "name": "RE_OBJECTIVE",
+      "type": "STRING(선택)",
+      "required": false,
+      "description": "연구목적"
+    },
+    {
+      "name": "MAIN_MEM",
+      "type": "STRING(선택)",
+      "required": false,
+      "description": "대표의원"
+    },
+    {
+      "name": "RE_MEM",
+      "type": "STRING(선택)",
+      "required": false,
+      "description": "연구책임의원"
+    },
+    {
+      "name": "OBJ_MEM",
+      "type": "STRING(선택)",
+      "required": false,
+      "description": "구성의원"
+    }
+  ]
+}

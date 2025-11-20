@@ -2,13 +2,12 @@
 
 import json
 import logging
-from datetime import date, datetime
 
 from fastmcp import FastMCP
 
 from assemblymcp.client import AssemblyAPIClient, AssemblyAPIError
 from assemblymcp.models import Bill
-from assemblymcp.services import DiscoveryService
+from assemblymcp.services import BillService, DiscoveryService
 from assemblymcp.settings import settings
 
 # Configure logging
@@ -22,6 +21,7 @@ client = AssemblyAPIClient(api_key=settings.assembly_api_key)
 
 # Initialize Services
 discovery_service = DiscoveryService(client)
+bill_service = BillService(client)
 
 
 @mcp.tool()
@@ -83,74 +83,38 @@ async def call_api_raw(service_id: str, params: str = "{}") -> str:
         return "An unexpected error occurred."
 
 
-@mcp.tool(name="get_latest_bills")
-async def get_latest_bills(size: int = 10, proposer_name: str | None = None) -> list[Bill]:
+@mcp.tool()
+async def get_bill_info(
+    age: str,
+    bill_id: str | None = None,
+    bill_name: str | None = None,
+    propose_dt: str | None = None,
+    proc_status: str | None = None,
+    limit: int = 10,
+) -> list[Bill]:
     """
-    국회의원 발의법률안 데이터를 최신순으로 조회합니다.
+    Search for legislative bills (의안) by ID, name, proposal date, or processing status.
+    This function integrates and abstracts multiple Bill APIs into a unified result.
 
     Args:
-        size: 조회할 법률안의 최대 개수 (최대 100).
-        proposer_name: 제안한 국회의원의 이름으로 필터링 (전체 이름 일치).
+        age: 대 (AGE). REQUIRED. 조회할 국회의 대수 (예: '21').
+        bill_id: 의안ID (BILL_ID/BILL_NO). 의안의 고유 식별자.
+        bill_name: 의안명 (BILL_NAME). 의안의 전체 이름.
+        propose_dt: 제안일자 (PROPOSE_DT). 의안이 발의된 날짜 (YYYYMMDD 형식).
+        proc_status: 처리상태 (PROC_STATUS). 의안의 현재 처리 단계 (예: 위원회 심사 등).
+        limit: 조회할 법률안의 최대 개수 (최대 100).
 
     Returns:
         조회된 법률안(Bill) 목록.
     """
-
-    # 1. API 파라미터 준비
-    service_id = "OK7XM1000938DS17215"
-    params = {
-        "pSize": min(size, 100),  # 최대 100건 제한
-        "pIndex": 1,
-    }
-
-    if proposer_name:
-        # API 문서에 따라 'PROPOSER' 파라미터로 필터링을 시도 (확인 필요)
-        params["PROPOSER"] = proposer_name
-
-    # 2. API 호출
-    try:
-        raw_data = await client.get_data(service_id=service_id, params=params)
-    except Exception as e:
-        # 오류가 발생하면 빈 목록이나 적절한 오류 메시지를 반환
-        print(f"API 호출 실패: {e}")
-        return []
-
-    # 3. 데이터 정제 및 Bill 모델 변환
-    bill_list = []
-
-    # 임시 데이터 추출 로직 (추정) - 실제 API 응답 구조를 파악하면 업데이트 필요
-    try:
-        # API 서비스 ID와 동일한 키를 가진 리스트를 찾습니다.
-        if isinstance(raw_data, dict):
-            results = raw_data.get(service_id, [])
-            if len(results) >= 1 and "row" in results[1]:
-                rows = results[1]["row"]
-                for row in rows:
-                    # 날짜 형식 변환을 위한 임시 함수
-                    def to_date(dt_str: str | None) -> date | None:
-                        if dt_str and len(dt_str) == 8:
-                            try:
-                                return datetime.strptime(dt_str, "%Y%m%d").date()
-                            except ValueError:
-                                pass
-                        return None
-
-                    bill = Bill(
-                        bill_no=row.get("BILL_NO", ""),
-                        bill_name=row.get("BILL_NAME", ""),
-                        propose_dt=to_date(row.get("PROPOSE_DT")),
-                        proposer_gbn_nm=row.get("PROPOSER_GBN_NM", ""),
-                        committee_dt=to_date(row.get("COMMITTEE_DT")),
-                        proc_result_cd=row.get("PROC_RESULT_CD"),
-                        link_url=row.get("LINK_URL"),
-                    )
-                    bill_list.append(bill)
-
-    except Exception as e:
-        print(f"데이터 정제 중 오류 발생: {e}")
-        return []
-
-    return bill_list
+    return await bill_service.get_bill_info(
+        age=age,
+        bill_id=bill_id,
+        bill_name=bill_name,
+        propose_dt=propose_dt,
+        proc_status=proc_status,
+        limit=limit,
+    )
 
 
 def main():

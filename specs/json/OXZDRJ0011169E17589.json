@@ -1,0 +1,45 @@
+{
+  "service_id": "OXZDRJ0011169E17589",
+  "endpoint": "nezimfsfayvtciyvx",
+  "endpoint_url": "https://open.assembly.go.kr/portal/openapi/nezimfsfayvtciyvx",
+  "basic_params": [
+    {
+      "name": "Key",
+      "type": "STRING(필수)",
+      "required": true,
+      "description": "인증키"
+    },
+    {
+      "name": "Type",
+      "type": "STRING(필수)",
+      "required": true,
+      "description": "호출 문서(xml, json)"
+    },
+    {
+      "name": "pIndex",
+      "type": "INTEGER(필수)",
+      "required": true,
+      "description": "페이지 위치"
+    },
+    {
+      "name": "pSize",
+      "type": "INTEGER(필수)",
+      "required": true,
+      "description": "페이지 당 요청 숫자"
+    }
+  ],
+  "request_params": [
+    {
+      "name": "BOOKNM",
+      "type": "STRING(선택)",
+      "required": false,
+      "description": "자료명"
+    },
+    {
+      "name": "INSERTDT",
+      "type": "STRING(선택)",
+      "required": false,
+      "description": "등록일자"
+    }
+  ]
+}

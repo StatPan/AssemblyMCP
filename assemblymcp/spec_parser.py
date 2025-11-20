@@ -180,7 +180,8 @@ class SpecParser:
 
                 # Check for correct content type before saving
                 content_type = response.headers.get("Content-Type", "")
-                if "spreadsheetml" not in content_type:
+                # Allow generic binary streams as well as explicit Excel types
+                if "spreadsheetml" not in content_type and "octet-stream" not in content_type:
                     raise SpecParseError(
                         f"Unexpected content type for {service_id}: {content_type}. "
                         f"Expected Excel file."

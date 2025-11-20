@@ -1,0 +1,39 @@
+{
+  "service_id": "O4BV430009830710440",
+  "endpoint": "nkulntiravezskrjd",
+  "endpoint_url": "https://open.assembly.go.kr/portal/openapi/nkulntiravezskrjd",
+  "basic_params": [
+    {
+      "name": "Key",
+      "type": "STRING(필수)",
+      "required": true,
+      "description": "인증키"
+    },
+    {
+      "name": "Type",
+      "type": "STRING(필수)",
+      "required": true,
+      "description": "호출 문서(xml, json)"
+    },
+    {
+      "name": "pIndex",
+      "type": "INTEGER(필수)",
+      "required": true,
+      "description": "페이지 위치"
+    },
+    {
+      "name": "pSize",
+      "type": "INTEGER(필수)",
+      "required": true,
+      "description": "페이지 당 요청 숫자"
+    }
+  ],
+  "request_params": [
+    {
+      "name": "V_TITLE",
+      "type": "STRING(선택)",
+      "required": false,
+      "description": "제목"
+    }
+  ]
+}

@@ -1,0 +1,87 @@
+{
+  "service_id": "OQ50H1000962NX16376",
+  "endpoint": "ncryefyuaflxnqbqo",
+  "endpoint_url": "https://open.assembly.go.kr/portal/openapi/ncryefyuaflxnqbqo",
+  "basic_params": [
+    {
+      "name": "Key",
+      "type": "STRING(필수)",
+      "required": true,
+      "description": "인증키"
+    },
+    {
+      "name": "Type",
+      "type": "STRING(필수)",
+      "required": true,
+      "description": "호출 문서(xml, json)"
+    },
+    {
+      "name": "pIndex",
+      "type": "INTEGER(필수)",
+      "required": true,
+      "description": "페이지 위치"
+    },
+    {
+      "name": "pSize",
+      "type": "INTEGER(필수)",
+      "required": true,
+      "description": "페이지 당 요청 숫자"
+    }
+  ],
+  "request_params": [
+    {
+      "name": "BILL_NO",
+      "type": "STRING(선택)",
+      "required": false,
+      "description": "청원번호"
+    },
+    {
+      "name": "BILL_ID",
+      "type": "STRING(선택)",
+      "required": false,
+      "description": "의안ID"
+    },
+    {
+      "name": "AGE",
+      "type": "STRING(필수)",
+      "required": true,
+      "description": "대"
+    },
+    {
+      "name": "BILL_NAME",
+      "type": "STRING(선택)",
+      "required": false,
+      "description": "청원명"
+    },
+    {
+      "name": "PROPOSER",
+      "type": "STRING(선택)",
+      "required": false,
+      "description": "청원인"
+    },
+    {
+      "name": "APPROVER",
+      "type": "STRING(선택)",
+      "required": false,
+      "description": "소개의원"
+    },
+    {
+      "name": "PROC_RESULT_CD",
+      "type": "STRING(선택)",
+      "required": false,
+      "description": "의결결과"
+    },
+    {
+      "name": "CURR_COMMITTEE_ID",
+      "type": "STRING(선택)",
+      "required": false,
+      "description": "소관위코드"
+    },
+    {
+      "name": "CURR_COMMITTEE",
+      "type": "STRING(선택)",
+      "required": false,
+      "description": "소관위"
+    }
+  ]
+}

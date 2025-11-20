@@ -1,0 +1,87 @@
+{
+  "service_id": "OXN4AR0009078I18280",
+  "endpoint": "nbtkkkcoaffclmwoc",
+  "endpoint_url": "https://open.assembly.go.kr/portal/openapi/nbtkkkcoaffclmwoc",
+  "basic_params": [
+    {
+      "name": "Key",
+      "type": "STRING(필수)",
+      "required": true,
+      "description": "인증키"
+    },
+    {
+      "name": "Type",
+      "type": "STRING(필수)",
+      "required": true,
+      "description": "호출 문서(xml, json)"
+    },
+    {
+      "name": "pIndex",
+      "type": "INTEGER(필수)",
+      "required": true,
+      "description": "페이지 위치"
+    },
+    {
+      "name": "pSize",
+      "type": "INTEGER(필수)",
+      "required": true,
+      "description": "페이지 당 요청 숫자"
+    }
+  ],
+  "request_params": [
+    {
+      "name": "YR",
+      "type": "STRING(선택)",
+      "required": false,
+      "description": "년도"
+    },
+    {
+      "name": "SN",
+      "type": "STRING(선택)",
+      "required": false,
+      "description": "일련번호"
+    },
+    {
+      "name": "DEMD_RSON",
+      "type": "STRING(선택)",
+      "required": false,
+      "description": "청구사항>청구내용"
+    },
+    {
+      "name": "OPB_FOM_NM",
+      "type": "STRING(선택)",
+      "required": false,
+      "description": "청구사항>공개형태"
+    },
+    {
+      "name": "CHRG_DEPT_NM",
+      "type": "STRING(선택)",
+      "required": false,
+      "description": "결정내용>담당부서"
+    },
+    {
+      "name": "DCS_DIV",
+      "type": "STRING(선택)",
+      "required": false,
+      "description": "결정내용>결정구분"
+    },
+    {
+      "name": "OPB_RSON",
+      "type": "STRING(선택)",
+      "required": false,
+      "description": "결정내용>공개내용"
+    },
+    {
+      "name": "CLSD_RSON",
+      "type": "STRING(선택)",
+      "required": false,
+      "description": "결정내용>비공개(부분공개) 내용 및 사유"
+    },
+    {
+      "name": "OPB_MTH",
+      "type": "STRING(선택)",
+      "required": false,
+      "description": "처리사항>공개방법"
+    }
+  ]
+}

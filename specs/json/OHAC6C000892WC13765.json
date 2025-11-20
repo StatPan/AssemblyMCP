@@ -1,0 +1,69 @@
+{
+  "service_id": "OHAC6C000892WC13765",
+  "endpoint": "nahfbzwvatmaxscwq",
+  "endpoint_url": "https://open.assembly.go.kr/portal/openapi/nahfbzwvatmaxscwq",
+  "basic_params": [
+    {
+      "name": "Key",
+      "type": "STRING(필수)",
+      "required": true,
+      "description": "인증키"
+    },
+    {
+      "name": "Type",
+      "type": "STRING(필수)",
+      "required": true,
+      "description": "호출 문서(xml, json)"
+    },
+    {
+      "name": "pIndex",
+      "type": "INTEGER(필수)",
+      "required": true,
+      "description": "페이지 위치"
+    },
+    {
+      "name": "pSize",
+      "type": "INTEGER(필수)",
+      "required": true,
+      "description": "페이지 당 요청 숫자"
+    }
+  ],
+  "request_params": [
+    {
+      "name": "ORD_NUM",
+      "type": "STRING(선택)",
+      "required": false,
+      "description": "대수"
+    },
+    {
+      "name": "YR",
+      "type": "STRING(선택)",
+      "required": false,
+      "description": "연도"
+    },
+    {
+      "name": "OPB_DAY",
+      "type": "STRING(선택)",
+      "required": false,
+      "description": "공개날짜"
+    },
+    {
+      "name": "PN",
+      "type": "STRING(선택)",
+      "required": false,
+      "description": "성명"
+    },
+    {
+      "name": "CCOF_INST_NM",
+      "type": "STRING(선택)",
+      "required": false,
+      "description": "겸직기관명"
+    },
+    {
+      "name": "PSIT_NM",
+      "type": "STRING(선택)",
+      "required": false,
+      "description": "직위"
+    }
+  ]
+}

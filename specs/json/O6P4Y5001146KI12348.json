@@ -1,0 +1,57 @@
+{
+  "service_id": "O6P4Y5001146KI12348",
+  "endpoint": "nubbgpxmawmzkclkc",
+  "endpoint_url": "https://open.assembly.go.kr/portal/openapi/nubbgpxmawmzkclkc",
+  "basic_params": [
+    {
+      "name": "Key",
+      "type": "STRING(필수)",
+      "required": true,
+      "description": "인증키"
+    },
+    {
+      "name": "Type",
+      "type": "STRING(필수)",
+      "required": true,
+      "description": "호출 문서(xml, json)"
+    },
+    {
+      "name": "pIndex",
+      "type": "INTEGER(필수)",
+      "required": true,
+      "description": "페이지 위치"
+    },
+    {
+      "name": "pSize",
+      "type": "INTEGER(필수)",
+      "required": true,
+      "description": "페이지 당 요청 숫자"
+    }
+  ],
+  "request_params": [
+    {
+      "name": "DIV",
+      "type": "STRING(선택)",
+      "required": false,
+      "description": "구분"
+    },
+    {
+      "name": "CHM_PN",
+      "type": "STRING(선택)",
+      "required": false,
+      "description": "성명"
+    },
+    {
+      "name": "CHM_APTM_YS",
+      "type": "STRING(선택)",
+      "required": false,
+      "description": "재임기간"
+    },
+    {
+      "name": "UNIT_NM",
+      "type": "STRING(선택)",
+      "required": false,
+      "description": "대"
+    }
+  ]
+}

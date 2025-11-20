@@ -1,0 +1,81 @@
+{
+  "service_id": "OK7XM1000938DS17215",
+  "endpoint": "nzmimeepazxkubdpn",
+  "endpoint_url": "https://open.assembly.go.kr/portal/openapi/nzmimeepazxkubdpn",
+  "basic_params": [
+    {
+      "name": "Key",
+      "type": "STRING(필수)",
+      "required": true,
+      "description": "인증키"
+    },
+    {
+      "name": "Type",
+      "type": "STRING(필수)",
+      "required": true,
+      "description": "호출 문서(xml, json)"
+    },
+    {
+      "name": "pIndex",
+      "type": "INTEGER(필수)",
+      "required": true,
+      "description": "페이지 위치"
+    },
+    {
+      "name": "pSize",
+      "type": "INTEGER(필수)",
+      "required": true,
+      "description": "페이지 당 요청 숫자"
+    }
+  ],
+  "request_params": [
+    {
+      "name": "BILL_ID",
+      "type": "STRING(선택)",
+      "required": false,
+      "description": "의안ID"
+    },
+    {
+      "name": "BILL_NO",
+      "type": "STRING(선택)",
+      "required": false,
+      "description": "의안번호"
+    },
+    {
+      "name": "BILL_NAME",
+      "type": "STRING(선택)",
+      "required": false,
+      "description": "법률안명"
+    },
+    {
+      "name": "COMMITTEE",
+      "type": "STRING(선택)",
+      "required": false,
+      "description": "소관위원회"
+    },
+    {
+      "name": "PROC_RESULT",
+      "type": "STRING(선택)",
+      "required": false,
+      "description": "본회의심의결과"
+    },
+    {
+      "name": "AGE",
+      "type": "STRING(필수)",
+      "required": true,
+      "description": "대수"
+    },
+    {
+      "name": "PROPOSER",
+      "type": "STRING(선택)",
+      "required": false,
+      "description": "제안자"
+    },
+    {
+      "name": "COMMITTEE_ID",
+      "type": "STRING(선택)",
+      "required": false,
+      "description": "소관위원회ID"
+    }
+  ]
+}
