@@ -39,3 +39,8 @@ venv.bak/
 
 # Project specific
 # specs/excel/ and specs/json/ are tracked
+
+# Project specific
+specs/excel/
+specs/api_specs/
+# specs/json/ is tracked (required for runtime)
