@@ -49,3 +49,15 @@ class Bill(BaseModel):
         None, description="최종 처리일자 (PROC_DT). 의안이 최종 처리된 날짜 (YYYYMMDD 형식)."
     )
     link_url: str = Field(..., description="상세 링크 URL (LINK_URL). 국회 의안정보시스템.")
+
+
+class BillDetail(Bill):
+    """
+    법률안 상세 정보 데이터 모델.
+    기본 Bill 정보에 제안이유와 주요내용을 추가합니다.
+    """
+
+    summary: str | None = Field(
+        None, description="주요내용 (MAJOR_CONTENT). 법률안의 주요 내용 요약."
+    )
+    reason: str | None = Field(None, description="제안이유 (PROPOSE_REASON). 법률안이 발의된 이유.")
