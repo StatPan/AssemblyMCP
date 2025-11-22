@@ -23,7 +23,8 @@ def test_calculate_file_hash(spec_parser, tmp_path):
 @pytest.mark.asyncio
 async def test_download_if_changed_new_file(spec_parser):
     service_id = "TEST_SERVICE"
-    content = b"new content" * 20  # Make it > 100 bytes
+    # Valid Excel/ZIP file content (starts with PK magic number)
+    content = b"PK\x03\x04" + b"new content" * 20  # Make it > 100 bytes with valid magic
 
     with patch("httpx.AsyncClient.get") as mock_get:
         mock_response = MagicMock()
@@ -44,7 +45,8 @@ async def test_download_if_changed_new_file(spec_parser):
 @pytest.mark.asyncio
 async def test_download_if_changed_unchanged(spec_parser):
     service_id = "TEST_SERVICE"
-    content = b"existing content" * 20  # Make it > 100 bytes
+    # Valid Excel/ZIP file content (starts with PK magic number)
+    content = b"PK\x03\x04" + b"existing content" * 20  # Make it > 100 bytes with valid magic
 
     # Create existing cache
     cache_file = spec_parser.cache_dir / f"{service_id}.xlsx"
@@ -68,8 +70,9 @@ async def test_download_if_changed_unchanged(spec_parser):
 @pytest.mark.asyncio
 async def test_download_if_changed_updated(spec_parser):
     service_id = "TEST_SERVICE"
-    old_content = b"old content" * 20
-    new_content = b"new content" * 20
+    # Valid Excel/ZIP file content (starts with PK magic number)
+    old_content = b"PK\x03\x04" + b"old content" * 20
+    new_content = b"PK\x03\x04" + b"new content" * 20
 
     # Create existing cache
     cache_file = spec_parser.cache_dir / f"{service_id}.xlsx"

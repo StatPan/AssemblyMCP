@@ -1,5 +1,7 @@
 """Parser for Korean National Assembly API Excel specifications."""
 
+from __future__ import annotations
+
 import asyncio
 import hashlib
 import json
@@ -8,6 +10,7 @@ import shutil
 import tempfile
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import Any
 
 import httpx
 import openpyxl
@@ -28,7 +31,7 @@ class APIParameter:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: dict) -> "APIParameter":
+    def from_dict(cls, data: dict) -> APIParameter:
         return cls(**data)
 
 
@@ -52,7 +55,7 @@ class APISpec:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "APISpec":
+    def from_dict(cls, data: dict) -> APISpec:
         return cls(
             service_id=data["service_id"],
             endpoint=data["endpoint"],
@@ -71,6 +74,13 @@ class SpecParseError(Exception):
 class SpecParser:
     """Parser for Excel API specification files."""
 
+    # Excel files (.xlsx) are ZIP archives with this magic number
+    EXCEL_MAGIC_NUMBERS = [
+        b"PK\x03\x04",  # Standard ZIP file (used by .xlsx)
+        b"PK\x05\x06",  # Empty ZIP archive
+        b"PK\x07\x08",  # Spanned ZIP archive
+    ]
+
     def __init__(self, cache_dir: Path | None = None):
         """
         Initialize the spec parser.
@@ -80,6 +90,22 @@ class SpecParser:
         """
         self.cache_dir = cache_dir or Path(tempfile.gettempdir()) / "assembly_specs"
         self.cache_dir.mkdir(parents=True, exist_ok=True)
+
+    def _is_valid_excel_file(self, content: bytes) -> bool:
+        """
+        Validate that the content is a valid Excel/ZIP file by checking magic numbers.
+
+        Args:
+            content: The file content as bytes
+
+        Returns:
+            True if the content appears to be a valid ZIP/Excel file
+        """
+        if len(content) < 4:
+            return False
+
+        # Check if content starts with any valid ZIP magic number
+        return any(content[: len(magic)] == magic for magic in self.EXCEL_MAGIC_NUMBERS)
 
     def save_spec_json(self, spec: APISpec, output_dir: Path) -> Path:
         """Save APISpec to a JSON file."""
@@ -117,13 +143,31 @@ class SpecParser:
             headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
             async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
                 response = await client.get(url, headers=headers)
-                response.raise_for_status()
+                try:
+                    response.raise_for_status()
+                except httpx.HTTPStatusError as exc:
+                    preview = exc.response.text[:200] if exc.response is not None else ""
+                    status = exc.response.status_code if exc.response else "unknown"
+                    fallback_reason = exc.response.reason_phrase if exc.response else str(exc)
+                    raise SpecParseError(
+                        f"Failed to download spec for {service_id} (status {status}): "
+                        f"{preview or fallback_reason}"
+                    ) from exc
 
                 if len(response.content) < 100:
                     content_preview = response.content[:50]
                     raise SpecParseError(
                         f"Downloaded file too small ({len(response.content)} bytes): "
                         f"{content_preview}"
+                    )
+
+                # Validate that the content is actually an Excel file
+                if not self._is_valid_excel_file(response.content):
+                    # Content is likely an HTML error page
+                    preview = response.content[:200].decode("utf-8", errors="replace")
+                    raise SpecParseError(
+                        f"Downloaded file for {service_id} is not a valid Excel file. "
+                        f"Server may have returned an error page. Content preview: {preview}"
                     )
 
                 # Save to cache
@@ -134,7 +178,9 @@ class SpecParser:
                 return cache_file
 
         except httpx.HTTPError as e:
-            raise SpecParseError(f"Failed to download spec for {service_id}: {e}") from e
+            raise SpecParseError(
+                f"Failed to download spec for {service_id}: {getattr(e, 'request', None)} {e}"
+            ) from e
 
     def calculate_file_hash(self, file_path: Path) -> str:
         """
@@ -176,20 +222,28 @@ class SpecParser:
 
             async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
                 response = await client.get(url, headers=headers)
-                response.raise_for_status()
-
-                # Check for correct content type before saving
-                content_type = response.headers.get("Content-Type", "")
-                # Allow generic binary streams as well as explicit Excel types
-                if "spreadsheetml" not in content_type and "octet-stream" not in content_type:
+                try:
+                    response.raise_for_status()
+                except httpx.HTTPStatusError as exc:
+                    preview = exc.response.text[:200] if exc.response is not None else ""
+                    status = exc.response.status_code if exc.response else "unknown"
                     raise SpecParseError(
-                        f"Unexpected content type for {service_id}: {content_type}. "
-                        f"Expected Excel file."
-                    )
+                        f"Failed to download spec for {service_id} (status {status}): "
+                        f"{preview or (exc.response.reason_phrase if exc.response else str(exc))}"
+                    ) from exc
 
                 if len(response.content) < 100:
                     raise SpecParseError(
                         f"Downloaded file too small: {len(response.content)} bytes"
+                    )
+
+                # Validate that the content is actually an Excel file
+                # Don't rely on Content-Type header as server may return HTML error pages
+                if not self._is_valid_excel_file(response.content):
+                    preview = response.content[:200].decode("utf-8", errors="replace")
+                    raise SpecParseError(
+                        f"Downloaded file for {service_id} is not a valid Excel file. "
+                        f"Server may have returned an error page. Content preview: {preview}"
                     )
 
                 with open(tmp_path, "wb") as f:
@@ -213,10 +267,30 @@ class SpecParser:
             logger.info(f"Spec for {service_id} updated.")
             return True
 
+        except httpx.HTTPError as e:
+            if tmp_path.exists():
+                tmp_path.unlink()
+            raise SpecParseError(
+                f"Failed to download spec for {service_id}: {getattr(e, 'request', None)} {e}"
+            ) from e
         except Exception as e:
             if tmp_path.exists():
                 tmp_path.unlink()
             raise SpecParseError(f"Failed to sync spec for {service_id}: {e}") from e
+
+    def describe_cache(self, service_id: str) -> dict[str, Any]:
+        """
+        Return metadata describing the cached spec file for a service.
+        """
+        cache_file = self.cache_dir / f"{service_id}.xlsx"
+        if cache_file.exists():
+            return {
+                "service_id": service_id,
+                "cached": True,
+                "path": str(cache_file),
+                "size_bytes": cache_file.stat().st_size,
+            }
+        return {"service_id": service_id, "cached": False, "path": None, "size_bytes": None}
 
     async def parse_spec(self, service_id: str) -> APISpec:
         """

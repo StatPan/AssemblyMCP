@@ -19,6 +19,11 @@ uv add --dev pytest-asyncio
 uv add httpx beautifulsoup4 lxml
 ```
 
+```bash
+# use .venv python with this command
+use uv run python
+```
+
 ### Updating Dependencies
 
 ```bash

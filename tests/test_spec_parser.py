@@ -1,8 +1,10 @@
 """Tests for spec parser functionality."""
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 
-from assemblymcp.spec_parser import SpecParser
+from assemblymcp.spec_parser import SpecParseError, SpecParser
 
 
 @pytest.fixture
@@ -124,3 +126,95 @@ async def test_parse_recent_api_spec(spec_parser):
     assert spec.service_id == service_id
     assert spec.endpoint == "nkimylolanvseqagq"
     assert len(spec.basic_params) > 0
+
+
+def test_is_valid_excel_file(spec_parser):
+    """Test Excel file validation by magic numbers."""
+    # Valid Excel/ZIP file (starts with PK magic number)
+    valid_content = b"PK\x03\x04" + b"\x00" * 100
+    assert spec_parser._is_valid_excel_file(valid_content) is True
+
+    # Valid empty ZIP
+    valid_empty_zip = b"PK\x05\x06" + b"\x00" * 100
+    assert spec_parser._is_valid_excel_file(valid_empty_zip) is True
+
+    # Invalid file - HTML content
+    html_content = b"<!DOCTYPE html><html><body>Error</body></html>"
+    assert spec_parser._is_valid_excel_file(html_content) is False
+
+    # Invalid file - JSON content
+    json_content = b'{"error": "Service not found"}'
+    assert spec_parser._is_valid_excel_file(json_content) is False
+
+    # Too small file
+    too_small = b"PK"
+    assert spec_parser._is_valid_excel_file(too_small) is False
+
+    # Empty file
+    empty = b""
+    assert spec_parser._is_valid_excel_file(empty) is False
+
+
+@pytest.mark.asyncio
+async def test_download_spec_rejects_html_error_page(spec_parser):
+    """Test that download_spec raises error when server returns HTML instead of Excel."""
+    service_id = "TEST_SERVICE_HTML_ERROR"
+
+    # Mock HTML error page response
+    html_error = b"""<!DOCTYPE html>
+<html lang="ko">
+<head><title>Error</title></head>
+<body>Service not found or unavailable.</body>
+</html>"""
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.content = html_error
+    mock_response.raise_for_status = MagicMock()
+
+    with patch("httpx.AsyncClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client.get = AsyncMock(return_value=mock_response)
+        mock_client_class.return_value = mock_client
+
+        # Should raise SpecParseError due to invalid file content
+        with pytest.raises(SpecParseError) as exc_info:
+            await spec_parser.download_spec(service_id)
+
+        assert "not a valid Excel file" in str(exc_info.value)
+        assert "error page" in str(exc_info.value).lower()
+
+
+@pytest.mark.asyncio
+async def test_download_if_changed_rejects_html_error_page(spec_parser):
+    """Test that download_if_changed raises error when server returns HTML instead of Excel."""
+    service_id = "TEST_SERVICE_HTML_CHANGED"
+
+    # Mock HTML error page response (make it longer than 100 bytes to bypass size check)
+    html_error = b"""<!DOCTYPE html>
+<html lang="ko">
+<head><title>Error Message - Korean National Assembly Open API Portal</title></head>
+<body><h1>Service Error</h1><p>The requested service ID was not found or is unavailable.</p></body>
+</html>"""
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.content = html_error
+    mock_response.headers = {"Content-Type": "text/html"}
+    mock_response.raise_for_status = MagicMock()
+
+    with patch("httpx.AsyncClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client.get = AsyncMock(return_value=mock_response)
+        mock_client_class.return_value = mock_client
+
+        # Should raise SpecParseError due to invalid file content
+        with pytest.raises(SpecParseError) as exc_info:
+            await spec_parser.download_if_changed(service_id)
+
+        assert "not a valid Excel file" in str(exc_info.value)
+        assert "error page" in str(exc_info.value).lower()
