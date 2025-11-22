@@ -1,12 +1,20 @@
 """MCP Server for Korean National Assembly API"""
 
+from __future__ import annotations
+
 import json
 import logging
+import os
+import sys
+import traceback
+from typing import Any, TypeVar
+
+os.environ.setdefault("FASTMCP_LOG_ENABLED", "false")
 
 from fastmcp import FastMCP
 
 from assemblymcp.client import AssemblyAPIClient, AssemblyAPIError
-from assemblymcp.models import Bill, BillDetail
+from assemblymcp.schemas import bill_detail_output_schema, bill_list_output_schema
 from assemblymcp.services import BillService, DiscoveryService, MeetingService, MemberService
 from assemblymcp.settings import settings
 
@@ -17,13 +25,41 @@ logger = logging.getLogger(__name__)
 mcp = FastMCP("AssemblyMCP")
 
 # Initialize API Client globally to load specs once
-client = AssemblyAPIClient(api_key=settings.assembly_api_key)
+try:
+    client = AssemblyAPIClient(api_key=settings.assembly_api_key)
+except Exception as e:
+    logger.error(f"Failed to initialize client: {e}")
+    client = None
 
 # Initialize Services
-discovery_service = DiscoveryService(client)
-bill_service = BillService(client)
-member_service = MemberService(client)
-meeting_service = MeetingService(client)
+if client:
+    discovery_service = DiscoveryService(client)
+    bill_service = BillService(client)
+    member_service = MemberService(client)
+    meeting_service = MeetingService(client)
+else:
+    discovery_service = None
+    bill_service = None
+    member_service = None
+    meeting_service = None
+
+ServiceT = TypeVar("ServiceT")
+
+
+def _require_service[ServiceT](service: ServiceT | None) -> ServiceT:
+    """Ensure the API client and requested service are available."""
+    if service is None:
+        raise RuntimeError(
+            "Assembly API client is not ready. "
+            "Set the ASSEMBLY_API_KEY environment variable and restart the server."
+        )
+    return service
+
+
+@mcp.tool()
+async def ping() -> str:
+    """Check if server is alive."""
+    return "pong"
 
 
 @mcp.tool()
@@ -35,21 +71,28 @@ async def get_assembly_info() -> str:
         Information about available API endpoints and configuration status.
         Also provides a recommended workflow for using the tools.
     """
-    api_key_status = "configured" if settings.assembly_api_key else "not configured"
-    service_count = len(client.specs)
-    return (
-        f"Korean National Assembly Open API MCP Server\n"
-        f"API Key: {api_key_status}\n"
-        f"Available Services: {service_count}\n\n"
-        f"Recommended Workflow:\n"
-        f"1. Find bills: Use 'search_bills(keyword)' or 'get_recent_bills()'.\n"
-        f"2. Get details: Use 'get_bill_details(bill_id)' with the ID from step 1 "
-        f"to see the summary and proposal reason.\n"
-        f"3. Check members: Use 'get_member_info(name)' to see who proposed it.\n"
-        f"4. Check meetings: Use 'get_meeting_records(bill_id)' to see discussion history.\n"
-        f"5. Advanced: Use 'get_bill_info' for specific filtering or 'list_api_services' "
-        f"to explore other datasets."
-    )
+    if not client:
+        return "Error: API Client not initialized. Please check API key configuration."
+
+    try:
+        api_key_status = "configured" if settings.assembly_api_key else "not configured"
+        service_count = len(client.specs)
+        return (
+            f"Korean National Assembly Open API MCP Server\n"
+            f"API Key: {api_key_status}\n"
+            f"Available Services: {service_count}\n\n"
+            f"Recommended Workflow:\n"
+            f"1. Find bills: Use 'search_bills(keyword)' or 'get_recent_bills()'.\n"
+            f"2. Get details: Use 'get_bill_details(bill_id)' with the ID from step 1 "
+            f"to see the summary and proposal reason.\n"
+            f"3. Check members: Use 'get_member_info(name)' to see who proposed it.\n"
+            f"4. Check meetings: Use 'get_meeting_records(bill_id)' to see discussion history.\n"
+            f"5. Advanced: Use 'get_bill_info' for specific filtering or 'list_api_services' "
+            f"to explore other datasets."
+        )
+    except Exception as e:
+        traceback.print_exc()
+        return f"Error getting assembly info: {e}"
 
 
 @mcp.tool()
@@ -64,7 +107,8 @@ async def list_api_services(keyword: str = "") -> list[dict[str, str]]:
     Returns:
         List of services matching the keyword. Each item contains id, name, and description.
     """
-    return await discovery_service.list_services(keyword)
+    service = _require_service(discovery_service)
+    return await service.list_services(keyword)
 
 
 @mcp.tool()
@@ -86,17 +130,20 @@ async def call_api_raw(service_id: str, params: str = "{}") -> str:
         return "Error: params must be a valid JSON string."
 
     try:
-        data = await discovery_service.call_raw(service_id=service_id, params=param_dict)
+        service = _require_service(discovery_service)
+        data = await service.call_raw(service_id=service_id, params=param_dict)
         return json.dumps(data, ensure_ascii=False, indent=2)
     except AssemblyAPIError as e:
         logger.error(f"API error calling service '{service_id}': {e}")
         return f"API Error: {e}"
-    except Exception:
+    except Exception as e:
         logger.exception(f"Unexpected error calling API service '{service_id}'")
-        return "An unexpected error occurred."
+        error_type = type(e).__name__
+        error_msg = str(e)
+        return f"Error ({error_type}): {error_msg}"
 
 
-@mcp.tool()
+@mcp.tool(output_schema=bill_list_output_schema())
 async def get_bill_info(
     age: str = "22",
     bill_id: str | None = None,
@@ -104,7 +151,7 @@ async def get_bill_info(
     propose_dt: str | None = None,
     proc_status: str | None = None,
     limit: int = 10,
-) -> list[Bill]:
+) -> list[dict[str, Any]]:
     """
     Advanced search for legislative bills with specific filters.
     Use this when you need to filter by specific fields like ID, date, or status.
@@ -121,7 +168,8 @@ async def get_bill_info(
     Returns:
         List of Bill objects.
     """
-    return await bill_service.get_bill_info(
+    service = _require_service(bill_service)
+    bills = await service.get_bill_info(
         age=age,
         bill_id=bill_id,
         bill_name=bill_name,
@@ -129,10 +177,11 @@ async def get_bill_info(
         proc_status=proc_status,
         limit=limit,
     )
+    return [bill.model_dump() for bill in bills]
 
 
-@mcp.tool()
-async def search_bills(keyword: str) -> list[Bill]:
+@mcp.tool(output_schema=bill_list_output_schema())
+async def search_bills(keyword: str) -> list[dict[str, Any]]:
     """
     Search for bills by keyword.
     Automatically searches the current legislative session (22nd),
@@ -148,11 +197,13 @@ async def search_bills(keyword: str) -> list[Bill]:
     Returns:
         List of matching bills.
     """
-    return await bill_service.search_bills(keyword)
+    service = _require_service(bill_service)
+    bills = await service.search_bills(keyword)
+    return [bill.model_dump() for bill in bills]
 
 
-@mcp.tool()
-async def get_recent_bills(limit: int = 10) -> list[Bill]:
+@mcp.tool(output_schema=bill_list_output_schema())
+async def get_recent_bills(limit: int = 10) -> list[dict[str, Any]]:
     """
     Get the most recently proposed bills.
     Useful for answering "what's new" or "latest bills".
@@ -167,11 +218,13 @@ async def get_recent_bills(limit: int = 10) -> list[Bill]:
     Returns:
         List of bills sorted by proposal date (newest first).
     """
-    return await bill_service.get_recent_bills(limit)
+    service = _require_service(bill_service)
+    bills = await service.get_recent_bills(limit)
+    return [bill.model_dump() for bill in bills]
 
 
-@mcp.tool()
-async def get_bill_details(bill_id: str) -> BillDetail | None:
+@mcp.tool(output_schema=bill_detail_output_schema())
+async def get_bill_details(bill_id: str) -> dict[str, Any] | None:
     """
     Get detailed information about a specific bill.
     Includes the bill's summary (main content) and reason for proposal.
@@ -187,7 +240,9 @@ async def get_bill_details(bill_id: str) -> BillDetail | None:
     Returns:
         BillDetail object containing summary and reason, or None if not found.
     """
-    return await bill_service.get_bill_details(bill_id)
+    service = _require_service(bill_service)
+    details = await service.get_bill_details(bill_id)
+    return details.model_dump() if details else None
 
 
 @mcp.tool()
@@ -202,7 +257,8 @@ async def get_member_info(name: str) -> list[dict]:
     Returns:
         List of member information dictionaries.
     """
-    return await member_service.get_member_info(name)
+    service = _require_service(member_service)
+    return await service.get_member_info(name)
 
 
 @mcp.tool()
@@ -217,18 +273,20 @@ async def get_meeting_records(bill_id: str) -> list[dict]:
     Returns:
         List of meeting records.
     """
-    return await meeting_service.get_meeting_records(bill_id)
+    service = _require_service(meeting_service)
+    return await service.get_meeting_records(bill_id)
 
 
 def main():
     """Run the MCP server"""
+    sys.stdout.reconfigure(line_buffering=True)
     # Validate settings on startup (but don't fail if API key is missing yet)
-    if settings.assembly_api_key:
-        print(f"[OK] API key configured: {settings.assembly_api_key[:8]}...")
-    else:
-        print("[WARNING] API key not configured. Set ASSEMBLY_API_KEY environment variable.")
+    if not settings.assembly_api_key:
+        logger.warning(
+            "ASSEMBLY_API_KEY is not configured. The server will run but tools will fail."
+        )
 
-    mcp.run()
+    mcp.run(show_banner=False)
 
 
 if __name__ == "__main__":

@@ -26,7 +26,8 @@ async def test_get_bill_info_success(bill_service, mock_client):
                 "head": [{"RESULT": {"CODE": "INFO-000", "MESSAGE": "Success"}}],
                 "row": [
                     {
-                        "BILL_ID": "2100001",
+                        "BILL_ID": "PRC_T2T3T4T5T6T7T8T9",
+                        "BILL_NO": "2100001",
                         "BILL_NAME": "Test Bill",
                         "PROPOSER": "Test Proposer",
                         "PROPOSER_KIND": "Member",
@@ -47,7 +48,8 @@ async def test_get_bill_info_success(bill_service, mock_client):
 
     assert len(bills) == 1
     assert isinstance(bills[0], Bill)
-    assert bills[0].bill_id == "2100001"
+    assert bills[0].bill_id == "PRC_T2T3T4T5T6T7T8T9"
+    assert bills[0].bill_no == "2100001"
     assert bills[0].bill_name == "Test Bill"
     assert bills[0].proposer == "Test Proposer"
 
@@ -124,13 +126,14 @@ async def test_get_recent_bills_sorting(bill_service, mock_client):
 
 @pytest.mark.asyncio
 async def test_get_bill_details(bill_service, mock_client):
-    # Mock basic info response
+    # Mock basic info response with both BILL_ID and BILL_NO
     basic_response = {
         "O4K6HM0012064I15889": [
             {
                 "row": [
                     {
-                        "BILL_ID": "2200001",
+                        "BILL_ID": "PRC_X1Y2Z3A4B5C6D7E8",
+                        "BILL_NO": "2200001",
                         "BILL_NAME": "Detail Bill",
                         "PROPOSE_DT": "20240101",
                         "LINK_URL": "http://test.com",
@@ -151,14 +154,119 @@ async def test_get_bill_details(bill_service, mock_client):
         if service_id == bill_service.BILL_SEARCH_ID:
             return basic_response
         if service_id == bill_service.BILL_DETAIL_ID:
+            # Verify that BILL_NO is being used (not BILL_ID)
+            assert "BILL_NO" in params
+            assert params["BILL_NO"] == "2200001"
             return detail_response
         return {}
 
     mock_client.get_data = AsyncMock(side_effect=side_effect)
 
-    detail = await bill_service.get_bill_details("2200001")
+    detail = await bill_service.get_bill_details("PRC_X1Y2Z3A4B5C6D7E8")
 
     assert detail is not None
+    assert detail.bill_id == "PRC_X1Y2Z3A4B5C6D7E8"
+    assert detail.bill_no == "2200001"
     assert detail.bill_name == "Detail Bill"
     assert detail.summary == "This is the summary."
     assert detail.reason == "This is the reason."
+
+
+@pytest.mark.asyncio
+async def test_bill_model_captures_both_ids(bill_service, mock_client):
+    """Test that Bill model captures both BILL_ID and BILL_NO separately."""
+    mock_response = {
+        "O4K6HM0012064I15889": [
+            {
+                "row": [
+                    {
+                        "BILL_ID": "PRC_ALPHA123BETA456",
+                        "BILL_NO": "2123709",
+                        "BILL_NAME": "Test Bill with Both IDs",
+                        "PROPOSE_DT": "20240101",
+                        "LINK_URL": "http://test.com",
+                    }
+                ]
+            }
+        ]
+    }
+    mock_client.get_data = AsyncMock(return_value=mock_response)
+
+    bills = await bill_service.get_bill_info(age="22", limit=1)
+
+    assert len(bills) == 1
+    bill = bills[0]
+    # Verify both fields are captured separately
+    assert bill.bill_id == "PRC_ALPHA123BETA456"
+    assert bill.bill_no == "2123709"
+
+
+@pytest.mark.asyncio
+async def test_bill_model_fallback_when_bill_id_missing(bill_service, mock_client):
+    """Test that bill_id falls back to BILL_NO when BILL_ID is missing."""
+    mock_response = {
+        "O4K6HM0012064I15889": [
+            {
+                "row": [
+                    {
+                        "BILL_NO": "2123709",
+                        "BILL_NAME": "Test Bill without BILL_ID",
+                        "PROPOSE_DT": "20240101",
+                        "LINK_URL": "http://test.com",
+                    }
+                ]
+            }
+        ]
+    }
+    mock_client.get_data = AsyncMock(return_value=mock_response)
+
+    bills = await bill_service.get_bill_info(age="22", limit=1)
+
+    assert len(bills) == 1
+    bill = bills[0]
+    # bill_id should fallback to BILL_NO value
+    assert bill.bill_id == "2123709"
+    assert bill.bill_no == "2123709"
+
+
+@pytest.mark.asyncio
+async def test_get_bill_details_uses_bill_no(bill_service, mock_client):
+    """Test that get_bill_details uses BILL_NO parameter when calling detail API."""
+    basic_response = {
+        "O4K6HM0012064I15889": [
+            {
+                "row": [
+                    {
+                        "BILL_ID": "PRC_TEST123",
+                        "BILL_NO": "9999999",
+                        "BILL_NAME": "Test Bill",
+                        "PROPOSE_DT": "20240101",
+                        "LINK_URL": "http://test.com",
+                    }
+                ]
+            }
+        ]
+    }
+
+    detail_response = {
+        "OS46YD0012559515463": [{"row": [{"MAIN_CNTS": "Summary", "RSON_CONT": "Reason"}]}]
+    }
+
+    call_params = {}
+
+    async def side_effect(service_id, params, **kwargs):
+        if service_id == bill_service.BILL_SEARCH_ID:
+            return basic_response
+        if service_id == bill_service.BILL_DETAIL_ID:
+            # Capture the params to verify later
+            call_params.update(params)
+            return detail_response
+        return {}
+
+    mock_client.get_data = AsyncMock(side_effect=side_effect)
+
+    await bill_service.get_bill_details("PRC_TEST123")
+
+    # Verify the detail API was called with BILL_NO, not BILL_ID
+    assert "BILL_NO" in call_params
+    assert call_params["BILL_NO"] == "9999999"
