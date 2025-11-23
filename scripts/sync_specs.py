@@ -171,7 +171,7 @@ async def sync_service(parser: SpecParser, service_id: str, service_name: str | 
         return "updated"
 
     except Exception as e:
-        logger.error(f"Failed to sync {service_id}: {e}")
+        logger.error(f"Failed to sync {service_id}: {e}", exc_info=True)
         return "failed"
 
 

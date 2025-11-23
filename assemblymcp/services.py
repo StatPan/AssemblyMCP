@@ -5,6 +5,7 @@ from typing import Any
 
 from assemblymcp.client import AssemblyAPIClient, AssemblyAPIError
 from assemblymcp.models import Bill, BillDetail, Committee
+from assemblymcp.settings import settings
 from assemblymcp.spec_parser import SpecParseError
 
 logger = logging.getLogger(__name__)
@@ -387,7 +388,8 @@ class MeetingService:
             date_end: End date (YYYY-MM-DD)
             limit: Max results
         """
-        params = {"pSize": limit}
+        # Fetch larger batch (max 100) to ensure filtering doesn't reduce results too much
+        params = {"pSize": 100}
 
         if committee_name:
             params["COMM_NAME"] = committee_name
@@ -404,8 +406,8 @@ class MeetingService:
         # Note: The API might not support range queries directly.
         # We will fetch and filter if necessary, but for now let's try basic params.
 
-        # Also, DAE_NUM (Age) is often required. Let's default to current (22).
-        params["DAE_NUM"] = "22"
+        # Use configured default assembly age
+        params["DAE_NUM"] = settings.default_assembly_age
 
         raw_data = await self.client.get_data(service_id=self.MEETING_INFO_ID, params=params)
         rows = _collect_rows(raw_data)
@@ -453,7 +455,9 @@ class CommitteeService:
                         limit_count=int(row.get("LIMIT_CNT")) if row.get("LIMIT_CNT") else None,
                     )
                 )
+            except (ValueError, TypeError, KeyError) as e:
+                logger.warning(f"Error parsing committee row: {e}", exc_info=True)
             except Exception as e:
-                logger.warning(f"Error parsing committee row: {e}")
+                logger.warning(f"Unexpected error parsing committee row: {e}", exc_info=True)
 
         return committees

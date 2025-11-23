@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     )
 
     assembly_api_key: str = ""
+    default_assembly_age: str = "22"
 
     def validate_api_key(self) -> None:
         """Validate that API key is provided"""
