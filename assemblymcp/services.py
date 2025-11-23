@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any
 
 from assemblymcp.client import AssemblyAPIClient, AssemblyAPIError
-from assemblymcp.models import Bill, BillDetail
+from assemblymcp.models import Bill, BillDetail, Committee
 from assemblymcp.spec_parser import SpecParseError
 
 logger = logging.getLogger(__name__)
@@ -369,3 +369,39 @@ class MeetingService:
         params = {"BILL_ID": bill_id}
         raw_data = await self.client.get_data(service_id=self.MEETING_INFO_ID, params=params)
         return _collect_rows(raw_data)
+
+
+class CommitteeService:
+    def __init__(self, client: AssemblyAPIClient):
+        self.client = client
+        # O2Q4ZT001004PV11014: 위원회 현황 정보 (Committee Status Info)
+        self.COMMITTEE_INFO_ID = "O2Q4ZT001004PV11014"
+
+    async def get_committee_list(self, committee_name: str | None = None) -> list[Committee]:
+        """
+        Get a list of committees.
+        """
+        params = {}
+        if committee_name:
+            params["COMMITTEE_NAME"] = committee_name
+
+        raw_data = await self.client.get_data(service_id=self.COMMITTEE_INFO_ID, params=params)
+        rows = _collect_rows(raw_data)
+
+        committees = []
+        for row in rows:
+            try:
+                committees.append(
+                    Committee(
+                        committee_code=str(row.get("HR_DEPT_CD", "")),
+                        committee_name=str(row.get("COMMITTEE_NAME", "")),
+                        committee_div=str(row.get("CMT_DIV_NM", "")),
+                        chairperson=row.get("HG_NM"),
+                        member_count=int(row.get("CURR_CNT")) if row.get("CURR_CNT") else None,
+                        limit_count=int(row.get("LIMIT_CNT")) if row.get("LIMIT_CNT") else None,
+                    )
+                )
+            except Exception as e:
+                logger.warning(f"Error parsing committee row: {e}")
+
+        return committees

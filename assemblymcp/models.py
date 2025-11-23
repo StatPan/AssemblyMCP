@@ -67,3 +67,32 @@ class BillDetail(Bill):
         None, description="주요내용 (MAJOR_CONTENT). 법률안의 주요 내용 요약."
     )
     reason: str | None = Field(None, description="제안이유 (PROPOSE_REASON). 법률안이 발의된 이유.")
+
+
+class Committee(BaseModel):
+    """
+    국회 위원회 정보 데이터 모델.
+    (Committee Information)
+    """
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "committee_code": "9700008",
+                "committee_name": "법제사법위원회",
+                "committee_div": "상임위원회",
+                "chairperson": "박광온",
+                "member_count": 18,
+                "limit_count": 18,
+            }
+        }
+    )
+
+    committee_code: str = Field(..., description="위원회 코드 (HR_DEPT_CD).")
+    committee_name: str = Field(..., description="위원회명 (COMMITTEE_NAME).")
+    committee_div: str | None = Field(
+        None, description="위원회 구분 (CMT_DIV_NM). 예: 상임위원회, 특별위원회."
+    )
+    chairperson: str | None = Field(None, description="위원장 (HG_NM).")
+    member_count: int | None = Field(None, description="현원 (CURR_CNT).")
+    limit_count: int | None = Field(None, description="정원 (LIMIT_CNT).")
