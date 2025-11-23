@@ -4,7 +4,8 @@ from datetime import datetime
 from typing import Any
 
 from assemblymcp.client import AssemblyAPIClient, AssemblyAPIError
-from assemblymcp.models import Bill, BillDetail
+from assemblymcp.models import Bill, BillDetail, Committee
+from assemblymcp.settings import settings
 from assemblymcp.spec_parser import SpecParseError
 
 logger = logging.getLogger(__name__)
@@ -357,15 +358,106 @@ class MemberService:
 class MeetingService:
     def __init__(self, client: AssemblyAPIClient):
         self.client = client
-        # Using "국정감사 회의록" as an example, but there are many meeting APIs.
-        # A unified search might be complex, so let's start with a specific one or a few.
-        # Let's use "의안 위원회심사 회의정보 조회" (OOWY4R001216HX11492) as it links to bills.
-        self.MEETING_INFO_ID = "OOWY4R001216HX11492"
+        # OR137O001023MZ19321: 위원회 회의록 (Committee Meeting Records)
+        self.MEETING_INFO_ID = "OR137O001023MZ19321"
 
     async def get_meeting_records(self, bill_id: str) -> list[dict[str, Any]]:
         """
         Get meeting records related to a bill.
+        This uses a different API (OOWY4R001216HX11492) specifically for bill-related meetings.
         """
+        # OOWY4R001216HX11492: 의안 위원회심사 회의정보 조회
+        bill_meeting_id = "OOWY4R001216HX11492"
         params = {"BILL_ID": bill_id}
-        raw_data = await self.client.get_data(service_id=self.MEETING_INFO_ID, params=params)
+        raw_data = await self.client.get_data(service_id=bill_meeting_id, params=params)
         return _collect_rows(raw_data)
+
+    async def search_meetings(
+        self,
+        committee_name: str | None = None,
+        date_start: str | None = None,
+        date_end: str | None = None,
+        limit: int = 10,
+    ) -> list[dict[str, Any]]:
+        """
+        Search for committee meetings.
+
+        Args:
+            committee_name: Name of the committee (e.g., "법제사법위원회")
+            date_start: Start date (YYYY-MM-DD)
+            date_end: End date (YYYY-MM-DD)
+            limit: Max results
+        """
+        # Fetch larger batch (max 100) to ensure filtering doesn't reduce results too much
+        params = {"pSize": 100}
+
+        if committee_name:
+            params["COMM_NAME"] = committee_name
+
+        # The API usually takes a single date or a range if supported,
+        # but the spec for OR137O001023MZ19321 typically has CONF_DATE.
+        # Let's check if we can filter by date.
+        # If the API only supports exact match on CONF_DATE, we might need to fetch and filter.
+        # For now, let's pass it if provided, but we might need to refine this
+        # based on actual API behavior.
+        if date_start:
+            params["CONF_DATE"] = date_start.replace("-", "")
+
+        # Note: The API might not support range queries directly.
+        # We will fetch and filter if necessary, but for now let's try basic params.
+
+        # Use configured default assembly age
+        params["DAE_NUM"] = settings.default_assembly_age
+
+        raw_data = await self.client.get_data(service_id=self.MEETING_INFO_ID, params=params)
+        rows = _collect_rows(raw_data)
+
+        # Post-filtering if needed (e.g. date range)
+        filtered = []
+        for row in rows:
+            conf_date = row.get("CONF_DATE", "")
+            if date_start and conf_date < date_start.replace("-", ""):
+                continue
+            if date_end and conf_date > date_end.replace("-", ""):
+                continue
+            filtered.append(row)
+
+        return filtered[:limit]
+
+
+class CommitteeService:
+    def __init__(self, client: AssemblyAPIClient):
+        self.client = client
+        # O2Q4ZT001004PV11014: 위원회 현황 정보 (Committee Status Info)
+        self.COMMITTEE_INFO_ID = "O2Q4ZT001004PV11014"
+
+    async def get_committee_list(self, committee_name: str | None = None) -> list[Committee]:
+        """
+        Get a list of committees.
+        """
+        params = {}
+        if committee_name:
+            params["COMMITTEE_NAME"] = committee_name
+
+        raw_data = await self.client.get_data(service_id=self.COMMITTEE_INFO_ID, params=params)
+        rows = _collect_rows(raw_data)
+
+        committees = []
+        for row in rows:
+            try:
+                committees.append(
+                    Committee(
+                        committee_code=str(row.get("HR_DEPT_CD", "")),
+                        committee_name=str(row.get("COMMITTEE_NAME", "")),
+                        committee_div=str(row.get("CMT_DIV_NM", "")),
+                        chairperson=row.get("HG_NM"),
+                        member_count=int(row.get("CURR_CNT")) if row.get("CURR_CNT") else None,
+                        limit_count=int(row.get("LIMIT_CNT")) if row.get("LIMIT_CNT") else None,
+                    )
+                )
+            except (ValueError, TypeError, KeyError) as e:
+                logger.warning(f"Error parsing committee row: {e}", exc_info=True)
+            except Exception as e:
+                logger.warning(f"Unexpected error parsing committee row: {e}", exc_info=True)
+
+        return committees

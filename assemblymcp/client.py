@@ -48,11 +48,11 @@ class AssemblyAPIClient:
         self.client = httpx.AsyncClient(timeout=30.0, follow_redirects=True)
         self.specs: dict[str, dict[str, Any]] = {}
 
-        # Default to specs/excel if not provided
+        # Default to user cache directory if not provided
         if spec_cache_dir is None:
-            current_file = Path(__file__)
-            project_root = current_file.parent.parent
-            spec_cache_dir = project_root / "specs" / "excel"
+            # Use ~/.cache/assemblymcp/specs
+            spec_cache_dir = Path.home() / ".cache" / "assemblymcp" / "specs"
+            spec_cache_dir.mkdir(parents=True, exist_ok=True)
 
         self.spec_parser = SpecParser(cache_dir=spec_cache_dir)
         self.parsed_specs: dict[str, APISpec] = {}
@@ -62,8 +62,7 @@ class AssemblyAPIClient:
         """Load API specifications from specs/ directory."""
         try:
             current_file = Path(__file__)
-            project_root = current_file.parent.parent
-            specs_dir = project_root / "specs"
+            specs_dir = current_file.parent / "specs"
 
             if not specs_dir.exists():
                 logger.warning(f"Specs directory not found at {specs_dir}")
@@ -85,22 +84,12 @@ class AssemblyAPIClient:
                 except Exception as e:
                     logger.error(f"Failed to load master list {master_file}: {e}")
 
-            # 2. Load Parsed Specs from JSON (specs/json/*.json)
-            json_dir = specs_dir / "json"
-            if json_dir.exists():
-                for json_file in json_dir.glob("*.json"):
-                    try:
-                        with open(json_file, encoding="utf-8") as f:
-                            data = json.load(f)
-                            spec = APISpec.from_dict(data)
-                            self.parsed_specs[spec.service_id] = spec
-                    except Exception as e:
-                        logger.error(f"Failed to load JSON spec {json_file}: {e}")
+            # 2. Load Parsed Specs from cache if available
+            # We don't pre-load everything, just what's in memory or needed.
+            # But we can scan the cache to populate self.parsed_specs if we wanted to,
+            # for now let's just rely on lazy loading via get_endpoint.
 
-            logger.info(
-                f"Loaded {len(self.specs)} API definitions and "
-                f"{len(self.parsed_specs)} parsed specs."
-            )
+            logger.info(f"Loaded {len(self.specs)} API definitions.")
 
         except Exception as e:
             logger.error(f"Error loading specs: {e}")

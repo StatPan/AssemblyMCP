@@ -15,7 +15,13 @@ from fastmcp import FastMCP
 
 from assemblymcp.client import AssemblyAPIClient, AssemblyAPIError
 from assemblymcp.schemas import bill_detail_output_schema, bill_list_output_schema
-from assemblymcp.services import BillService, DiscoveryService, MeetingService, MemberService
+from assemblymcp.services import (
+    BillService,
+    CommitteeService,
+    DiscoveryService,
+    MeetingService,
+    MemberService,
+)
 from assemblymcp.settings import settings
 
 # Configure logging
@@ -37,11 +43,13 @@ if client:
     bill_service = BillService(client)
     member_service = MemberService(client)
     meeting_service = MeetingService(client)
+    committee_service = CommitteeService(client)
 else:
     discovery_service = None
     bill_service = None
     member_service = None
     meeting_service = None
+    committee_service = None
 
 ServiceT = TypeVar("ServiceT")
 
@@ -275,6 +283,51 @@ async def get_meeting_records(bill_id: str) -> list[dict]:
     """
     service = _require_service(meeting_service)
     return await service.get_meeting_records(bill_id)
+
+
+@mcp.tool()
+async def search_meetings(
+    committee_name: str | None = None,
+    date_start: str | None = None,
+    date_end: str | None = None,
+    limit: int = 10,
+) -> list[dict[str, Any]]:
+    """
+    Search for committee meetings.
+
+    Args:
+        committee_name: Name of the committee (e.g., "법제사법위원회").
+        date_start: Start date (YYYY-MM-DD).
+        date_end: End date (YYYY-MM-DD).
+        limit: Max results (default 10).
+
+    Returns:
+        List of meeting records.
+    """
+    service = _require_service(meeting_service)
+    return await service.search_meetings(
+        committee_name=committee_name,
+        date_start=date_start,
+        date_end=date_end,
+        limit=limit,
+    )
+
+
+@mcp.tool()
+async def get_committee_list(committee_name: str | None = None) -> list[dict[str, Any]]:
+    """
+    Get a list of committees.
+    Useful for finding the correct committee name or code for filtering.
+
+    Args:
+        committee_name: Optional name to filter by (e.g., "법제사법위원회").
+
+    Returns:
+        List of committee information objects.
+    """
+    service = _require_service(committee_service)
+    committees = await service.get_committee_list(committee_name)
+    return [c.model_dump() for c in committees]
 
 
 def main():
