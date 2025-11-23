@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import urllib.parse
 from pathlib import Path
 from typing import Any
 
@@ -123,7 +124,21 @@ class AssemblyAPIClient:
         """
         if service_id not in self.parsed_specs:
             logger.info(f"Parsing spec for {service_id}")
-            spec = await self.spec_parser.parse_spec(service_id)
+
+            # Determine inf_seq from specs if available
+            inf_seq = 2
+            if service_id in self.specs:
+                ddc_url = self.specs[service_id].get("DDC_URL", "")
+                if ddc_url:
+                    try:
+                        parsed = urllib.parse.urlparse(ddc_url)
+                        qs = urllib.parse.parse_qs(parsed.query)
+                        if "infSeq" in qs:
+                            inf_seq = int(qs["infSeq"][0])
+                    except Exception:
+                        pass  # Fallback to default 2
+
+            spec = await self.spec_parser.parse_spec(service_id, inf_seq=inf_seq)
             self.parsed_specs[service_id] = spec
 
         return self.parsed_specs[service_id].endpoint
