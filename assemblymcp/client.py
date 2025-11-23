@@ -62,8 +62,7 @@ class AssemblyAPIClient:
         """Load API specifications from specs/ directory."""
         try:
             current_file = Path(__file__)
-            project_root = current_file.parent.parent
-            specs_dir = project_root / "specs"
+            specs_dir = current_file.parent / "specs"
 
             if not specs_dir.exists():
                 logger.warning(f"Specs directory not found at {specs_dir}")

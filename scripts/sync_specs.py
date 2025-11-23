@@ -195,7 +195,7 @@ async def main():
     # Setup directories
     current_file = Path(__file__)
     project_root = current_file.parent.parent
-    specs_dir = project_root / "specs"
+    specs_dir = project_root / "assemblymcp" / "specs"
     specs_dir.mkdir(parents=True, exist_ok=True)
 
     # Initialize parser (uses user cache dir by default)
