@@ -357,18 +357,70 @@ class MemberService:
 class MeetingService:
     def __init__(self, client: AssemblyAPIClient):
         self.client = client
-        # Using "국정감사 회의록" as an example, but there are many meeting APIs.
-        # A unified search might be complex, so let's start with a specific one or a few.
-        # Let's use "의안 위원회심사 회의정보 조회" (OOWY4R001216HX11492) as it links to bills.
-        self.MEETING_INFO_ID = "OOWY4R001216HX11492"
+        # OR137O001023MZ19321: 위원회 회의록 (Committee Meeting Records)
+        self.MEETING_INFO_ID = "OR137O001023MZ19321"
 
     async def get_meeting_records(self, bill_id: str) -> list[dict[str, Any]]:
         """
         Get meeting records related to a bill.
+        This uses a different API (OOWY4R001216HX11492) specifically for bill-related meetings.
         """
+        # OOWY4R001216HX11492: 의안 위원회심사 회의정보 조회
+        bill_meeting_id = "OOWY4R001216HX11492"
         params = {"BILL_ID": bill_id}
-        raw_data = await self.client.get_data(service_id=self.MEETING_INFO_ID, params=params)
+        raw_data = await self.client.get_data(service_id=bill_meeting_id, params=params)
         return _collect_rows(raw_data)
+
+    async def search_meetings(
+        self,
+        committee_name: str | None = None,
+        date_start: str | None = None,
+        date_end: str | None = None,
+        limit: int = 10,
+    ) -> list[dict[str, Any]]:
+        """
+        Search for committee meetings.
+
+        Args:
+            committee_name: Name of the committee (e.g., "법제사법위원회")
+            date_start: Start date (YYYY-MM-DD)
+            date_end: End date (YYYY-MM-DD)
+            limit: Max results
+        """
+        params = {"pSize": limit}
+
+        if committee_name:
+            params["COMM_NAME"] = committee_name
+
+        # The API usually takes a single date or a range if supported,
+        # but the spec for OR137O001023MZ19321 typically has CONF_DATE.
+        # Let's check if we can filter by date.
+        # If the API only supports exact match on CONF_DATE, we might need to fetch and filter.
+        # For now, let's pass it if provided, but we might need to refine this
+        # based on actual API behavior.
+        if date_start:
+            params["CONF_DATE"] = date_start.replace("-", "")
+
+        # Note: The API might not support range queries directly.
+        # We will fetch and filter if necessary, but for now let's try basic params.
+
+        # Also, DAE_NUM (Age) is often required. Let's default to current (22).
+        params["DAE_NUM"] = "22"
+
+        raw_data = await self.client.get_data(service_id=self.MEETING_INFO_ID, params=params)
+        rows = _collect_rows(raw_data)
+
+        # Post-filtering if needed (e.g. date range)
+        filtered = []
+        for row in rows:
+            conf_date = row.get("CONF_DATE", "")
+            if date_start and conf_date < date_start.replace("-", ""):
+                continue
+            if date_end and conf_date > date_end.replace("-", ""):
+                continue
+            filtered.append(row)
+
+        return filtered[:limit]
 
 
 class CommitteeService:

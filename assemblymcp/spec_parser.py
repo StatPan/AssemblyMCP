@@ -107,10 +107,13 @@ class SpecParser:
         # Check if content starts with any valid ZIP magic number
         return any(content[: len(magic)] == magic for magic in self.EXCEL_MAGIC_NUMBERS)
 
-    def save_spec_json(self, spec: APISpec, output_dir: Path) -> Path:
+    def save_spec_json(self, spec: APISpec, output_dir: Path, filename: str | None = None) -> Path:
         """Save APISpec to a JSON file."""
         output_dir.mkdir(parents=True, exist_ok=True)
-        output_file = output_dir / f"{spec.service_id}.json"
+        name = filename or spec.service_id
+        if not name.endswith(".json"):
+            name += ".json"
+        output_file = output_dir / name
         with open(output_file, "w", encoding="utf-8") as f:
             json.dump(spec.to_dict(), f, ensure_ascii=False, indent=2)
         return output_file

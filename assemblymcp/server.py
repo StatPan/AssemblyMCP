@@ -286,6 +286,34 @@ async def get_meeting_records(bill_id: str) -> list[dict]:
 
 
 @mcp.tool()
+async def search_meetings(
+    committee_name: str | None = None,
+    date_start: str | None = None,
+    date_end: str | None = None,
+    limit: int = 10,
+) -> list[dict[str, Any]]:
+    """
+    Search for committee meetings.
+
+    Args:
+        committee_name: Name of the committee (e.g., "법제사법위원회").
+        date_start: Start date (YYYY-MM-DD).
+        date_end: End date (YYYY-MM-DD).
+        limit: Max results (default 10).
+
+    Returns:
+        List of meeting records.
+    """
+    service = _require_service(meeting_service)
+    return await service.search_meetings(
+        committee_name=committee_name,
+        date_start=date_start,
+        date_end=date_end,
+        limit=limit,
+    )
+
+
+@mcp.tool()
 async def get_committee_list(committee_name: str | None = None) -> list[dict[str, Any]]:
     """
     Get a list of committees.

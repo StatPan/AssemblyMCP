@@ -9,6 +9,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 from pathlib import Path
 
 import httpx
@@ -123,9 +124,18 @@ def save_master_list(rows: list[dict], specs_dir: Path):
     logger.info(f"Saved {len(rows)} APIs to {output_file}")
 
 
-def load_service_ids(specs_dir: Path) -> list[str]:
-    """Load all service IDs from specs directory."""
-    service_ids = set()
+def sanitize_filename(name: str) -> str:
+    """Sanitize string to be safe for filenames."""
+    # Remove invalid characters
+    name = re.sub(r'[\\/*?:"<>|]', "", name)
+    # Replace spaces with underscores
+    name = name.replace(" ", "_")
+    return name
+
+
+def load_service_map(specs_dir: Path) -> dict[str, str]:
+    """Load service ID to Name mapping from master list."""
+    service_map = {}
 
     # Load from all_apis.json (new) or all_apis_p*.json (old)
     spec_files = list(specs_dir.glob("all_apis.json")) + list(specs_dir.glob("all_apis_p*.json"))
@@ -139,15 +149,18 @@ def load_service_ids(specs_dir: Path) -> list[str]:
                         if "row" in item:
                             for row in item["row"]:
                                 inf_id = row.get("INF_ID")
-                                if inf_id:
-                                    service_ids.add(inf_id)
+                                inf_nm = row.get("INF_NM")
+                                if inf_id and inf_nm:
+                                    service_map[inf_id] = inf_nm
         except Exception as e:
             logger.error(f"Failed to load spec file {spec_file}: {e}")
 
-    return sorted(service_ids)
+    return service_map
 
 
-async def sync_service(parser: SpecParser, service_id: str, json_dir: Path) -> str:
+async def sync_service(
+    parser: SpecParser, service_id: str, service_name: str | None, json_dir: Path
+) -> str:
     """
     Sync a single service.
     Returns status: 'updated', 'unchanged', 'failed'
@@ -156,13 +169,17 @@ async def sync_service(parser: SpecParser, service_id: str, json_dir: Path) -> s
         # Download Excel (updates cache if changed)
         updated = await parser.download_if_changed(service_id)
 
-        # Check if JSON exists
-        json_file = json_dir / f"{service_id}.json"
+        # Determine filename
+        filename = sanitize_filename(service_name) if service_name else service_id
+
+        # Check if JSON exists (check both ID-based and Name-based to be safe, but we prefer Name)
+        # Actually, we just check if the target file exists
+        target_file = json_dir / f"{filename}.json"
 
         # If Excel updated OR JSON missing, parse and save JSON
-        if updated or not json_file.exists():
+        if updated or not target_file.exists():
             spec = await parser.parse_spec(service_id)
-            parser.save_spec_json(spec, json_dir)
+            parser.save_spec_json(spec, json_dir, filename=filename)
             return "updated"
 
         return "unchanged"
@@ -211,7 +228,7 @@ async def main():
         logger.info("Fetching master API list...")
 
         # Load old IDs for diff
-        old_ids = set(load_service_ids(specs_dir))
+        old_ids = set(load_service_map(specs_dir).keys())
 
         rows = await fetch_master_list(api_key, spec_parser)
         if rows:
@@ -236,8 +253,11 @@ async def main():
             logger.warning("No rows fetched from master list. Skipping update.")
 
     # 2. Load IDs (Reload to get new ones if we just synced)
+    service_map = {}
     if args.service_id:
-        service_ids = [args.service_id]
+        # If specific ID requested, try to find its name if possible, otherwise None
+        full_map = load_service_map(specs_dir)
+        service_map = {args.service_id: full_map.get(args.service_id)}
     else:
         # Optimization: If syncing list and it didn't change, and not forced, skip individual checks
         if args.sync_list and not master_list_changed and not args.force:
@@ -247,9 +267,10 @@ async def main():
             return
 
         logger.info("Loading service IDs from specs directory...")
-        service_ids = load_service_ids(specs_dir)
-        logger.info(f"Found {len(service_ids)} services.")
+        service_map = load_service_map(specs_dir)
+        logger.info(f"Found {len(service_map)} services.")
 
+    service_ids = sorted(service_map.keys())
     if args.limit:
         service_ids = service_ids[: args.limit]
 
@@ -261,7 +282,7 @@ async def main():
     chunk_size = 5
     for i in range(0, len(service_ids), chunk_size):
         chunk = service_ids[i : i + chunk_size]
-        tasks = [sync_service(spec_parser, sid, json_dir) for sid in chunk]
+        tasks = [sync_service(spec_parser, sid, service_map.get(sid), json_dir) for sid in chunk]
         results = await asyncio.gather(*tasks)
 
         for res in results:
