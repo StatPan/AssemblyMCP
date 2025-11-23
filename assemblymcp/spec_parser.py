@@ -292,12 +292,13 @@ class SpecParser:
             }
         return {"service_id": service_id, "cached": False, "path": None, "size_bytes": None}
 
-    async def parse_spec(self, service_id: str) -> APISpec:
+    async def parse_spec(self, service_id: str, inf_seq: int = 2) -> APISpec:
         """
         Parse Excel specification file to extract API details.
 
         Args:
             service_id: The service ID to parse
+            inf_seq: The specification sequence number (default: 2)
 
         Returns:
             APISpec object containing parsed specification
@@ -305,7 +306,7 @@ class SpecParser:
         Raises:
             SpecParseError: If parsing fails
         """
-        spec_file = await self.download_spec(service_id)
+        spec_file = await self.download_spec(service_id, inf_seq=inf_seq)
 
         def _parse_sync():
             try:

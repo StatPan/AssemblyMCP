@@ -44,3 +44,6 @@ venv.bak/
 
 specs/api_specs/
 # specs/json/ is tracked (required for runtime)
+
+# Logs
+*.log
