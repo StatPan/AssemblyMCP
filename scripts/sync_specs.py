@@ -8,7 +8,6 @@ import argparse
 import asyncio
 import json
 import logging
-import os
 import re
 from pathlib import Path
 
@@ -158,31 +157,19 @@ def load_service_map(specs_dir: Path) -> dict[str, str]:
     return service_map
 
 
-async def sync_service(
-    parser: SpecParser, service_id: str, service_name: str | None, json_dir: Path
-) -> str:
+async def sync_service(parser: SpecParser, service_id: str, service_name: str | None) -> str:
     """
-    Sync a single service.
-    Returns status: 'updated', 'unchanged', 'failed'
+    Sync a single service by parsing its spec (downloads if not cached).
+    Returns status: 'updated', 'failed'
     """
     try:
-        # Download Excel (updates cache if changed)
-        updated = await parser.download_if_changed(service_id)
+        # parse_spec handles caching internally:
+        # 1. Checks cache first
+        # 2. Downloads to memory if not cached
+        # 3. Saves to cache as JSON
+        await parser.parse_spec(service_id)
+        return "updated"
 
-        # Determine filename
-        filename = sanitize_filename(service_name) if service_name else service_id
-
-        # Check if JSON exists (check both ID-based and Name-based to be safe, but we prefer Name)
-        # Actually, we just check if the target file exists
-        target_file = json_dir / f"{filename}.json"
-
-        # If Excel updated OR JSON missing, parse and save JSON
-        if updated or not target_file.exists():
-            spec = await parser.parse_spec(service_id)
-            parser.save_spec_json(spec, json_dir, filename=filename)
-            return "updated"
-
-        return "unchanged"
     except Exception as e:
         logger.error(f"Failed to sync {service_id}: {e}")
         return "failed"
@@ -205,67 +192,23 @@ async def main():
     )
     args = parser.parse_args()
 
+    # Setup directories
+    current_file = Path(__file__)
+    project_root = current_file.parent.parent
     specs_dir = project_root / "specs"
+    specs_dir.mkdir(parents=True, exist_ok=True)
 
-    # Use specs/excel for cache (gitignored ideally)
-    excel_cache_dir = specs_dir / "excel"
-    excel_cache_dir.mkdir(exist_ok=True)
+    # Initialize parser (uses user cache dir by default)
+    spec_parser = SpecParser()
+    logger.info(f"Using cache directory: {spec_parser.cache_dir}")
 
-    # Use specs/json for persistent repo storage
-    json_dir = specs_dir / "json"
-    json_dir.mkdir(exist_ok=True)
-
-    spec_parser = SpecParser(cache_dir=excel_cache_dir)
-
-    # 1. Master List Sync
-    master_list_changed = False
-    if args.sync_list:
-        api_key = args.api_key or os.getenv("ASSEMBLY_API_KEY")
-        if not api_key:
-            logger.error("API Key required for sync-list. Set ASSEMBLY_API_KEY or pass --api-key")
-            return
-
-        logger.info("Fetching master API list...")
-
-        # Load old IDs for diff
-        old_ids = set(load_service_map(specs_dir).keys())
-
-        rows = await fetch_master_list(api_key, spec_parser)
-        if rows:
-            save_master_list(rows, specs_dir)
-
-            new_ids = {row["INF_ID"] for row in rows if "INF_ID" in row}
-
-            # Diff
-            added = new_ids - old_ids
-            removed = old_ids - new_ids
-
-            if added:
-                logger.info(f"Found {len(added)} NEW APIs: {added}")
-                master_list_changed = True
-            if removed:
-                logger.info(f"Found {len(removed)} DELETED APIs: {removed}")
-                master_list_changed = True
-
-            if not added and not removed:
-                logger.info("No changes in API list.")
-        else:
-            logger.warning("No rows fetched from master list. Skipping update.")
-
-    # 2. Load IDs (Reload to get new ones if we just synced)
+    # Load service IDs from master list
     service_map = {}
     if args.service_id:
         # If specific ID requested, try to find its name if possible, otherwise None
         full_map = load_service_map(specs_dir)
         service_map = {args.service_id: full_map.get(args.service_id)}
     else:
-        # Optimization: If syncing list and it didn't change, and not forced, skip individual checks
-        if args.sync_list and not master_list_changed and not args.force:
-            logger.info(
-                "Master list is unchanged. Skipping individual spec sync (use --force to override)."
-            )
-            return
-
         logger.info("Loading service IDs from specs directory...")
         service_map = load_service_map(specs_dir)
         logger.info(f"Found {len(service_map)} services.")
@@ -274,27 +217,35 @@ async def main():
     if args.limit:
         service_ids = service_ids[: args.limit]
 
-    logger.info(f"Starting sync for {len(service_ids)} services...")
+    logger.info(f"Starting sync for {len(service_ids)} services to cache...")
 
-    stats = {"updated": 0, "unchanged": 0, "failed": 0}
+    stats = {"updated": 0, "failed": 0}
 
     # Process in chunks
     chunk_size = 5
     for i in range(0, len(service_ids), chunk_size):
         chunk = service_ids[i : i + chunk_size]
-        tasks = [sync_service(spec_parser, sid, service_map.get(sid), json_dir) for sid in chunk]
-        results = await asyncio.gather(*tasks)
+        tasks = [sync_service(spec_parser, sid, service_map.get(sid)) for sid in chunk]
 
-        for res in results:
-            stats[res] += 1
+        results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        await asyncio.sleep(0.5)
+        for result in results:
+            if isinstance(result, Exception):
+                stats["failed"] += 1
+            elif result == "updated":
+                stats["updated"] += 1
+            else:
+                stats["failed"] += 1
 
-        if (i + chunk_size) % 20 == 0:
-            logger.info(f"Progress: {i + chunk_size}/{len(service_ids)} - {stats}")
+        logger.info(
+            f"Progress: {i + len(chunk)}/{len(service_ids)} "
+            f"(Updated: {stats['updated']}, Failed: {stats['failed']})"
+        )
 
-    logger.info("Sync completed!")
-    logger.info(f"Final Stats: {stats}")
+    logger.info("\n=== Sync Complete ===")
+    logger.info(f"Updated: {stats['updated']}")
+    logger.info(f"Failed: {stats['failed']}")
+    logger.info(f"Cache directory: {spec_parser.cache_dir}")
 
 
 if __name__ == "__main__":

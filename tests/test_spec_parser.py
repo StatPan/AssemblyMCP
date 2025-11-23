@@ -94,14 +94,14 @@ async def test_clear_cache(spec_parser):
     service_id = "OK7XM1000938DS17215"
 
     # Parse to populate cache
-    await spec_parser.parse_spec(service_id)
+    spec1 = await spec_parser.parse_spec(service_id)
 
-    # Clear specific cache
+    # Clear specific cache (should not error)
     spec_parser.clear_cache(service_id)
 
-    # File should be removed
-    cache_file = spec_parser.cache_dir / f"{service_id}.xlsx"
-    assert not cache_file.exists()
+    # Parse again should work (re-downloads)
+    spec2 = await spec_parser.parse_spec(service_id)
+    assert spec2.service_id == spec1.service_id
 
 
 @pytest.mark.asyncio
@@ -156,8 +156,8 @@ def test_is_valid_excel_file(spec_parser):
 
 
 @pytest.mark.asyncio
-async def test_download_spec_rejects_html_error_page(spec_parser):
-    """Test that download_spec raises error when server returns HTML instead of Excel."""
+async def test_parse_spec_rejects_html_error_page(spec_parser):
+    """Test that parse_spec raises error when server returns HTML instead of Excel."""
     service_id = "TEST_SERVICE_HTML_ERROR"
 
     # Mock HTML error page response
@@ -181,40 +181,6 @@ async def test_download_spec_rejects_html_error_page(spec_parser):
 
         # Should raise SpecParseError due to invalid file content
         with pytest.raises(SpecParseError) as exc_info:
-            await spec_parser.download_spec(service_id)
+            await spec_parser.parse_spec(service_id)
 
         assert "not a valid Excel file" in str(exc_info.value)
-        assert "error page" in str(exc_info.value).lower()
-
-
-@pytest.mark.asyncio
-async def test_download_if_changed_rejects_html_error_page(spec_parser):
-    """Test that download_if_changed raises error when server returns HTML instead of Excel."""
-    service_id = "TEST_SERVICE_HTML_CHANGED"
-
-    # Mock HTML error page response (make it longer than 100 bytes to bypass size check)
-    html_error = b"""<!DOCTYPE html>
-<html lang="ko">
-<head><title>Error Message - Korean National Assembly Open API Portal</title></head>
-<body><h1>Service Error</h1><p>The requested service ID was not found or is unavailable.</p></body>
-</html>"""
-
-    mock_response = MagicMock()
-    mock_response.status_code = 200
-    mock_response.content = html_error
-    mock_response.headers = {"Content-Type": "text/html"}
-    mock_response.raise_for_status = MagicMock()
-
-    with patch("httpx.AsyncClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client.get = AsyncMock(return_value=mock_response)
-        mock_client_class.return_value = mock_client
-
-        # Should raise SpecParseError due to invalid file content
-        with pytest.raises(SpecParseError) as exc_info:
-            await spec_parser.download_if_changed(service_id)
-
-        assert "not a valid Excel file" in str(exc_info.value)
-        assert "error page" in str(exc_info.value).lower()

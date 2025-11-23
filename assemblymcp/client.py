@@ -48,11 +48,10 @@ class AssemblyAPIClient:
         self.client = httpx.AsyncClient(timeout=30.0, follow_redirects=True)
         self.specs: dict[str, dict[str, Any]] = {}
 
-        # Default to .cache/assembly_specs if not provided
+        # Default to user cache directory if not provided
         if spec_cache_dir is None:
-            current_file = Path(__file__)
-            project_root = current_file.parent.parent
-            spec_cache_dir = project_root / ".cache" / "assembly_specs"
+            # Use ~/.cache/assemblymcp/specs
+            spec_cache_dir = Path.home() / ".cache" / "assemblymcp" / "specs"
             spec_cache_dir.mkdir(parents=True, exist_ok=True)
 
         self.spec_parser = SpecParser(cache_dir=spec_cache_dir)
