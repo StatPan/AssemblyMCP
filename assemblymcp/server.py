@@ -11,6 +11,10 @@ from typing import Any, TypeVar
 
 os.environ.setdefault("FASTMCP_LOG_ENABLED", "false")
 
+# Configure logging to file to avoid polluting stdout/stderr (breaks MCP protocol)
+import tempfile
+from pathlib import Path
+
 from fastmcp import FastMCP
 
 from assemblymcp.client import AssemblyAPIClient, AssemblyAPIError
@@ -24,7 +28,17 @@ from assemblymcp.services import (
 )
 from assemblymcp.settings import settings
 
-# Configure logging
+log_dir = Path(tempfile.gettempdir()) / "assemblymcp"
+log_dir.mkdir(exist_ok=True)
+log_file = log_dir / "server.log"
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    filename=str(log_file),
+    filemode="a",
+)
+
 logger = logging.getLogger(__name__)
 
 # Initialize FastMCP server
