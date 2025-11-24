@@ -170,7 +170,7 @@ async def get_bill_info(
     age: str = "22",
     bill_id: str | None = None,
     bill_name: str | None = None,
-    propose_dt: str | None = None,
+    proc_dt: str | None = None,
     proc_status: str | None = None,
     limit: int = 10,
 ) -> list[dict[str, Any]]:
@@ -183,7 +183,7 @@ async def get_bill_info(
         age: 대 (AGE). Defaults to "22" (current session).
         bill_id: 의안ID (BILL_ID/BILL_NO).
         bill_name: 의안명 (BILL_NAME).
-        propose_dt: 제안일자 (PROPOSE_DT). YYYYMMDD format.
+        proc_dt: 의결일 (PROC_DT). YYYYMMDD format (e.g., "20240315").
         proc_status: 처리상태 (PROC_STATUS).
         limit: Max results (default 10).
 
@@ -195,7 +195,7 @@ async def get_bill_info(
         age=age,
         bill_id=bill_id,
         bill_name=bill_name,
-        propose_dt=propose_dt,
+        proc_dt=proc_dt,
         proc_status=proc_status,
         limit=limit,
     )
@@ -284,7 +284,7 @@ async def get_member_info(name: str) -> list[dict]:
 
 
 @mcp.tool()
-async def get_meeting_records(bill_id: str) -> list[dict]:
+async def get_meeting_records(bill_id: str) -> list[dict] | dict[str, str]:
     """
     Get committee meeting records related to a specific bill.
     Useful for understanding the discussion and legislative history of a bill.
@@ -293,10 +293,21 @@ async def get_meeting_records(bill_id: str) -> list[dict]:
         bill_id: The ID of the bill (e.g., '2100001').
 
     Returns:
-        List of meeting records.
+        List of meeting records, or a message object if no records found.
     """
     service = _require_service(meeting_service)
-    return await service.get_meeting_records(bill_id)
+    records = await service.get_meeting_records(bill_id)
+
+    if not records:
+        return {
+            "message": f"No meeting records found for bill {bill_id}.",
+            "note": (
+                "This bill may not have been reviewed in committee yet, "
+                "or the review is still in progress."
+            ),
+        }
+
+    return records
 
 
 @mcp.tool()

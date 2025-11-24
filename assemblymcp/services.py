@@ -200,7 +200,7 @@ class BillService:
         age: str,  # REQUIRED by spec: 'AGE'
         bill_id: str | None = None,
         bill_name: str | None = None,
-        propose_dt: str | None = None,
+        proc_dt: str | None = None,
         proc_status: str | None = None,
         limit: int = 10,
     ) -> list[Bill]:
@@ -212,7 +212,7 @@ class BillService:
             "AGE": age,  # REQUIRED
             "BILL_ID": bill_id,
             "BILL_NAME": bill_name,
-            "PROPOSE_DT": propose_dt,
+            "PROC_DT": proc_dt,
             "PROC_RESULT_CD": proc_status,
             "pSize": limit,
         }
