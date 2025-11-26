@@ -438,12 +438,11 @@ def main():
     # Check for transport configuration
     transport = os.getenv("MCP_TRANSPORT", "stdio").lower()
 
-    if transport == "sse":
-        logger.info("Starting AssemblyMCP in SSE mode")
-        mcp.run(transport="sse")
-    else:
-        logger.info("Starting AssemblyMCP in stdio mode")
-        mcp.run(transport="stdio")
+    if transport != "sse":
+        transport = "stdio"
+
+    logger.info(f"Starting AssemblyMCP in {transport} mode")
+    mcp.run(transport=transport)
 
 
 if __name__ == "__main__":

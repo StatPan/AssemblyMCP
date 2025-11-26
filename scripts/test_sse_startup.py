@@ -12,38 +12,52 @@ def main():
     env = os.environ.copy()
     env["MCP_TRANSPORT"] = "sse"
 
+    # Determine platform for process group handling
+    is_windows = sys.platform == "win32"
+
+    popen_kwargs = {
+        "stdout": subprocess.PIPE,
+        "stderr": subprocess.PIPE,
+        "env": env,
+    }
+
+    if is_windows:
+        popen_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+    else:
+        popen_kwargs["preexec_fn"] = os.setsid
+
     # Start the server
-    process = subprocess.Popen(
-        ["uv", "run", "assemblymcp"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        env=env,
-        preexec_fn=os.setsid,  # Create new process group for clean kill
-    )
+    process = subprocess.Popen(["uv", "run", "assemblymcp"], **popen_kwargs)
 
     try:
-        # Wait for server to start
+        # Wait for server to start using polling
         print("Waiting for server to start...")
-        time.sleep(5)
+        url = "http://localhost:8000/sse"
+        server_started = False
 
-        # Check if process is still running
-        if process.poll() is not None:
-            stdout, stderr = process.communicate()
-            print(f"Server exited early with code {process.returncode}")
-            print(f"STDOUT: {stdout.decode()}")
-            print(f"STDERR: {stderr.decode()}")
+        for _ in range(10):  # Poll for up to 10 seconds
+            if process.poll() is not None:
+                break  # Server exited prematurely
+            try:
+                # A simple HEAD request is enough to check for connection
+                requests.head(url, timeout=1)
+                print("Server is up!")
+                server_started = True
+                break
+            except requests.exceptions.ConnectionError:
+                time.sleep(1)
+
+        if not server_started:
+            if process.poll() is not None:
+                stdout, stderr = process.communicate()
+                print(f"Server exited early with code {process.returncode}")
+                print(f"STDOUT: {stdout.decode()}")
+                print(f"STDERR: {stderr.decode()}")
+            else:
+                print("❌ Server did not start within the timeout period.")
             sys.exit(1)
 
         # Try to connect to the SSE endpoint
-        # FastMCP default SSE endpoint is usually /sse
-        # But we need to know the port. FastMCP usually prints it.
-        # Let's read stdout to find the port.
-
-        # Since we can't easily read stdout in real-time without blocking or threads
-        # in this simple script, we'll assume default port 8000 or try a few common ones.
-        # Actually, FastMCP uses uvicorn default which is 8000.
-
-        url = "http://localhost:8000/sse"
         print(f"Connecting to {url}...")
 
         try:
@@ -67,7 +81,10 @@ def main():
 
     finally:
         print("Stopping server...")
-        os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+        if is_windows:
+            process.send_signal(signal.CTRL_BREAK_EVENT)
+        else:
+            os.killpg(os.getpgid(process.pid), signal.SIGTERM)
         process.wait()
 
 
