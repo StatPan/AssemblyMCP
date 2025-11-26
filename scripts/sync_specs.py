@@ -12,9 +12,8 @@ import re
 from pathlib import Path
 
 import httpx
+from assembly_client.parser import SpecParser
 from dotenv import load_dotenv
-
-from assemblymcp.spec_parser import SpecParser
 
 # Load environment variables
 load_dotenv()

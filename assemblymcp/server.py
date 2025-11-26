@@ -15,9 +15,10 @@ os.environ.setdefault("FASTMCP_LOG_ENABLED", "false")
 import tempfile
 from pathlib import Path
 
+from assembly_client.api import AssemblyAPIClient
+from assembly_client.errors import AssemblyAPIError
 from fastmcp import FastMCP
 
-from assemblymcp.client import AssemblyAPIClient, AssemblyAPIError
 from assemblymcp.schemas import bill_detail_output_schema, bill_list_output_schema
 from assemblymcp.services import (
     BillService,
@@ -98,7 +99,7 @@ async def get_assembly_info() -> str:
 
     try:
         api_key_status = "configured" if settings.assembly_api_key else "not configured"
-        service_count = len(client.specs)
+        service_count = len(client.service_map)
         return (
             f"Korean National Assembly Open API MCP Server\n"
             f"API Key: {api_key_status}\n"
@@ -115,6 +116,37 @@ async def get_assembly_info() -> str:
     except Exception as e:
         traceback.print_exc()
         return f"Error getting assembly info: {e}"
+
+
+@mcp.tool()
+async def get_api_spec(service_id: str) -> dict[str, Any]:
+    """
+    Get detailed specification for a specific API service.
+
+    This returns the complete API specification including endpoint URL,
+    request parameters with types/constraints, and response structure.
+    Useful for dynamic API exploration when high-level tools don't meet your needs.
+
+    Workflow:
+    1. Use 'list_api_services(keyword)' to find service IDs
+    2. Call this tool with the service_id to see parameter details
+    3. Use 'call_api_raw(service_id, params)' to make custom API calls
+
+    Args:
+        service_id: The service ID (e.g., 'O4K6HM0012064I15889')
+
+    Returns:
+        Complete API specification including parameters and endpoint
+    """
+    if not client:
+        raise RuntimeError("API client not initialized")
+
+    try:
+        spec = await client.spec_parser.parse_spec(service_id)
+        return spec.to_dict()
+    except Exception as e:
+        logger.error(f"Failed to get spec for {service_id}: {e}")
+        return {"error": str(e), "service_id": service_id}
 
 
 @mcp.tool()

@@ -3,10 +3,11 @@ import re
 from datetime import datetime
 from typing import Any
 
-from assemblymcp.client import AssemblyAPIClient, AssemblyAPIError
+from assembly_client.api import AssemblyAPIClient
+from assembly_client.errors import AssemblyAPIError, SpecParseError
+
 from assemblymcp.models import Bill, BillDetail, Committee
 from assemblymcp.settings import settings
-from assemblymcp.spec_parser import SpecParseError
 
 logger = logging.getLogger(__name__)
 
@@ -40,24 +41,31 @@ class DiscoveryService:
         Search for available API services by keyword.
         """
         results = []
-        for service_id, spec in self.client.specs.items():
-            name = spec.get("INF_NM", "")
-            description = spec.get("INF_EXP", "")
-            category = spec.get("CATE_NM", "")
 
-            if (
-                not keyword
-                or keyword.lower() in name.lower()
-                or keyword.lower() in description.lower()
-            ):
-                results.append(
-                    {
-                        "id": service_id,
-                        "name": name,
-                        "category": category,
-                        "description": description,
-                    }
-                )
+        # Iterate through all service metadata
+        for service_id, metadata in self.client.service_metadata.items():
+            name = metadata.get("name", "")
+            description = metadata.get("description", "")
+            category = metadata.get("category", "")
+
+            # Filter by keyword if provided
+            if keyword:
+                keyword_lower = keyword.lower()
+                if not (
+                    keyword_lower in name.lower()
+                    or keyword_lower in description.lower()
+                    or keyword_lower in service_id.lower()
+                ):
+                    continue
+
+            results.append(
+                {
+                    "id": service_id,
+                    "name": name,
+                    "category": category,
+                    "description": description,
+                }
+            )
 
         # Sort by name
         results.sort(key=lambda x: x["name"])
