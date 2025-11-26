@@ -185,7 +185,7 @@ async def call_api_raw(service_id: str, params: str = "{}") -> str:
 
     try:
         service = _require_service(discovery_service)
-        data = await service.call_raw(service_id_or_name=service_id, params=param_dict)
+        data = await service.call_raw(service_id=service_id, params=param_dict)
         return json.dumps(data, ensure_ascii=False, indent=2)
     except AssemblyAPIError as e:
         logger.error(f"API error calling service '{service_id}': {e}")
