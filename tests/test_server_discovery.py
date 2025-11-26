@@ -4,19 +4,17 @@ import pytest
 
 from assemblymcp.services import DiscoveryService
 
-# Sample specs for testing
-SAMPLE_SPECS = {
+# Sample service metadata for testing
+SAMPLE_SERVICE_METADATA = {
     "TEST_ID_1": {
-        "INF_ID": "TEST_ID_1",
-        "INF_NM": "Meeting Records",
-        "INF_EXP": "Records of assembly meetings",
-        "CATE_NM": "Activity",
+        "name": "Meeting Records",
+        "description": "Records of assembly meetings",
+        "category": "Activity",
     },
     "TEST_ID_2": {
-        "INF_ID": "TEST_ID_2",
-        "INF_NM": "Member Info",
-        "INF_EXP": "Information about members",
-        "CATE_NM": "Member",
+        "name": "Member Info",
+        "description": "Information about members",
+        "category": "Member",
     },
 }
 
@@ -24,7 +22,7 @@ SAMPLE_SPECS = {
 @pytest.fixture
 def mock_client():
     mock = MagicMock()
-    mock.specs = SAMPLE_SPECS
+    mock.service_metadata = SAMPLE_SERVICE_METADATA
     return mock
 
 
@@ -61,5 +59,7 @@ async def test_call_raw_success(discovery_service, mock_client):
 
     result = await discovery_service.call_raw("TEST_ID_1", params={"pSize": 5})
 
-    mock_client.get_data.assert_called_once_with(service_id="TEST_ID_1", params={"pSize": 5})
+    mock_client.get_data.assert_called_once_with(
+        service_id_or_name="TEST_ID_1", params={"pSize": 5}
+    )
     assert result == {"result": "success"}

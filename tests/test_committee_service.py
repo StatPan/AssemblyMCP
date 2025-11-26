@@ -59,7 +59,7 @@ async def test_get_committee_list(committee_service, mock_client):
     # Verify API call parameters
     mock_client.get_data.assert_called_once()
     call_args = mock_client.get_data.call_args
-    assert call_args.kwargs["service_id"] == "O2Q4ZT001004PV11014"
+    assert call_args.kwargs["service_id_or_name"] == "O2Q4ZT001004PV11014"
     assert call_args.kwargs["params"] == {}
 
 

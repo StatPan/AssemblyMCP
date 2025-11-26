@@ -15,9 +15,10 @@ os.environ.setdefault("FASTMCP_LOG_ENABLED", "false")
 import tempfile
 from pathlib import Path
 
+from assembly_client.api import AssemblyAPIClient
+from assembly_client.errors import AssemblyAPIError
 from fastmcp import FastMCP
 
-from assemblymcp.client import AssemblyAPIClient, AssemblyAPIError
 from assemblymcp.schemas import bill_detail_output_schema, bill_list_output_schema
 from assemblymcp.services import (
     BillService,
@@ -98,7 +99,7 @@ async def get_assembly_info() -> str:
 
     try:
         api_key_status = "configured" if settings.assembly_api_key else "not configured"
-        service_count = len(client.specs)
+        service_count = len(client.service_map)
         return (
             f"Korean National Assembly Open API MCP Server\n"
             f"API Key: {api_key_status}\n"
@@ -115,6 +116,64 @@ async def get_assembly_info() -> str:
     except Exception as e:
         traceback.print_exc()
         return f"Error getting assembly info: {e}"
+
+
+@mcp.tool()
+async def get_api_spec(service_id: str) -> dict[str, Any]:
+    """
+    Get detailed specification for a specific API service.
+
+    This returns the complete API specification including endpoint URL,
+    request parameters with types/constraints, and response structure.
+    Useful for dynamic API exploration when high-level tools don't meet your needs.
+
+    Workflow:
+    1. Use 'list_api_services(keyword)' to find service IDs
+    2. Call this tool with the service_id to see parameter details
+    3. Use 'call_api_raw(service_id, params)' to make custom API calls
+
+    Args:
+        service_id: The service ID (e.g., 'O4K6HM0012064I15889')
+
+    Returns:
+        Complete API specification including parameters and endpoint
+    """
+    if not client:
+        raise RuntimeError("API client not initialized")
+
+    try:
+        spec = await client.spec_parser.parse_spec(service_id)
+        return spec.to_dict()
+    except Exception as e:
+        logger.error(f"Failed to get spec for {service_id}: {e}")
+
+        # Provide detailed troubleshooting information
+        cache_dir = "unknown"
+        if hasattr(client.spec_parser, "cache_dir"):
+            cache_dir = str(client.spec_parser.cache_dir)
+
+        error_response = {
+            "error": str(e),
+            "error_type": type(e).__name__,
+            "service_id": service_id,
+            "help": (
+                "스펙 파일 다운로드에 실패했습니다. 가능한 원인:\n\n"
+                "1. 공공데이터 포털의 스펙 파일 형식이 변경됨\n"
+                "   → 다운로드된 파일이 Excel이 아닌 HTML 오류 페이지일 수 있습니다.\n\n"
+                "2. 네트워크 문제 또는 일시적인 서버 오류\n"
+                "   → 잠시 후 다시 시도해보세요.\n\n"
+                "3. 서비스 ID가 유효하지 않음\n"
+                "   → list_api_services()로 올바른 서비스 ID를 확인하세요.\n\n"
+                "대안 방법:\n"
+                "- list_api_services()로 서비스 기본 정보 확인\n"
+                "- 공공데이터포털(data.go.kr)에서 API 명세 직접 확인\n"
+                "- call_api_raw()로 파라미터를 추정하여 시도 (고급 사용자)"
+            ),
+            "spec_cache_location": cache_dir,
+            "suggested_action": "Try: list_api_services(keyword='') to see all available services",
+        }
+
+        return error_response
 
 
 @mcp.tool()
@@ -153,7 +212,7 @@ async def call_api_raw(service_id: str, params: str = "{}") -> str:
 
     try:
         service = _require_service(discovery_service)
-        data = await service.call_raw(service_id=service_id, params=param_dict)
+        data = await service.call_raw(service_id_or_name=service_id, params=param_dict)
         return json.dumps(data, ensure_ascii=False, indent=2)
     except AssemblyAPIError as e:
         logger.error(f"API error calling service '{service_id}': {e}")
@@ -172,6 +231,7 @@ async def get_bill_info(
     bill_name: str | None = None,
     propose_dt: str | None = None,
     proc_status: str | None = None,
+    page: int = 1,
     limit: int = 10,
 ) -> list[dict[str, Any]]:
     """
@@ -185,6 +245,7 @@ async def get_bill_info(
         bill_name: 의안명 (BILL_NAME).
         propose_dt: 제안일자 (PROPOSE_DT). YYYYMMDD format.
         proc_status: 처리상태 (PROC_STATUS).
+        page: Page number (default 1).
         limit: Max results (default 10).
 
     Returns:
@@ -197,13 +258,14 @@ async def get_bill_info(
         bill_name=bill_name,
         propose_dt=propose_dt,
         proc_status=proc_status,
+        page=page,
         limit=limit,
     )
     return [bill.model_dump() for bill in bills]
 
 
 @mcp.tool(output_schema=bill_list_output_schema())
-async def search_bills(keyword: str) -> list[dict[str, Any]]:
+async def search_bills(keyword: str, page: int = 1, limit: int = 10) -> list[dict[str, Any]]:
     """
     Search for bills by keyword.
     Automatically searches the current legislative session (22nd),
@@ -215,17 +277,19 @@ async def search_bills(keyword: str) -> list[dict[str, Any]]:
 
     Args:
         keyword: Search term (e.g., "artificial intelligence", "budget").
+        page: Page number (default 1).
+        limit: Max results (default 10).
 
     Returns:
         List of matching bills.
     """
     service = _require_service(bill_service)
-    bills = await service.search_bills(keyword)
+    bills = await service.search_bills(keyword, page=page, limit=limit)
     return [bill.model_dump() for bill in bills]
 
 
 @mcp.tool(output_schema=bill_list_output_schema())
-async def get_recent_bills(limit: int = 10) -> list[dict[str, Any]]:
+async def get_recent_bills(page: int = 1, limit: int = 10) -> list[dict[str, Any]]:
     """
     Get the most recently proposed bills.
     Useful for answering "what's new" or "latest bills".
@@ -235,18 +299,19 @@ async def get_recent_bills(limit: int = 10) -> list[dict[str, Any]]:
     from the result and call 'get_bill_details(bill_id)'.
 
     Args:
+        page: Page number (default 1).
         limit: Number of bills to return (default 10).
 
     Returns:
         List of bills sorted by proposal date (newest first).
     """
     service = _require_service(bill_service)
-    bills = await service.get_recent_bills(limit)
+    bills = await service.get_recent_bills(page=page, limit=limit)
     return [bill.model_dump() for bill in bills]
 
 
 @mcp.tool(output_schema=bill_detail_output_schema())
-async def get_bill_details(bill_id: str) -> dict[str, Any] | None:
+async def get_bill_details(bill_id: str, age: str | None = None) -> dict[str, Any] | None:
     """
     Get detailed information about a specific bill.
     Includes the bill's summary (main content) and reason for proposal.
@@ -258,12 +323,13 @@ async def get_bill_details(bill_id: str) -> dict[str, Any] | None:
 
     Args:
         bill_id: The ID of the bill (e.g., '2100001').
+        age: Optional legislative session age (e.g., "22"). If provided, skips probing.
 
     Returns:
         BillDetail object containing summary and reason, or None if not found.
     """
     service = _require_service(bill_service)
-    details = await service.get_bill_details(bill_id)
+    details = await service.get_bill_details(bill_id, age=age)
     return details.model_dump() if details else None
 
 
@@ -304,15 +370,24 @@ async def search_meetings(
     committee_name: str | None = None,
     date_start: str | None = None,
     date_end: str | None = None,
+    page: int = 1,
     limit: int = 10,
 ) -> list[dict[str, Any]]:
     """
     Search for committee meetings.
 
+    Note: This API often returns empty results due to strict filtering or limited data availability.
+    For better results:
+    - Use recent dates (within last 6 months)
+    - Try without date filters first to see available data
+    - Use get_committee_list() to get exact committee names
+    - Be aware that meeting data may not be immediately available after meetings
+
     Args:
         committee_name: Name of the committee (e.g., "법제사법위원회").
         date_start: Start date (YYYY-MM-DD).
         date_end: End date (YYYY-MM-DD).
+        page: Page number (default 1).
         limit: Max results (default 10).
 
     Returns:
@@ -323,6 +398,7 @@ async def search_meetings(
         committee_name=committee_name,
         date_start=date_start,
         date_end=date_end,
+        page=page,
         limit=limit,
     )
 

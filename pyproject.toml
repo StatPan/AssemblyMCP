@@ -5,6 +5,9 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["assemblymcp"]
 
+[tool.hatch.metadata]
+allow-direct-references = true
+
 
 [project]
 name = "assemblymcp"
@@ -14,6 +17,7 @@ license = "MIT"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "assembly-api-client @ git+https://github.com/StatPan/assembly-api-client.git",
     "beautifulsoup4>=4.14.2",
     "fastmcp>=2.13.1",
     "httpx>=0.28.1",

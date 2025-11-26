@@ -26,10 +26,25 @@ wheels = [
 ]
 
 [[package]]
+name = "assembly-api-client"
+version = "0.1.1"
+source = { git = "https://github.com/StatPan/assembly-api-client.git#e34027a43a2a64ec196ebd86317a2a17049e68b9" }
+dependencies = [
+    { name = "httpx" },
+    { name = "openpyxl" },
+    { name = "platformdirs" },
+    { name = "pydantic" },
+    { name = "python-dotenv" },
+    { name = "tenacity" },
+    { name = "typer" },
+]
+
+[[package]]
 name = "assemblymcp"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "assembly-api-client" },
     { name = "beautifulsoup4" },
     { name = "fastmcp" },
     { name = "httpx" },
@@ -52,6 +67,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "assembly-api-client", git = "https://github.com/StatPan/assembly-api-client.git" },
     { name = "beautifulsoup4", specifier = ">=4.14.2" },
     { name = "fastmcp", specifier = ">=2.13.1" },
     { name = "httpx", specifier = ">=0.28.1" },
