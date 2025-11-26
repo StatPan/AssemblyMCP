@@ -75,7 +75,7 @@ class DiscoveryService:
         """
         Call a specific API service with raw parameters.
         """
-        return await self.client.get_data(service_id=service_id, params=params)
+        return await self.client.get_data(service_id_or_name=service_id, params=params)
 
 
 class BillService:
@@ -228,7 +228,7 @@ class BillService:
         params = {k: v for k, v in params.items() if v is not None}
 
         # Call the primary Bill Search API
-        raw_data = await self.client.get_data(service_id=self.BILL_SEARCH_ID, params=params)
+        raw_data = await self.client.get_data(service_id_or_name=self.BILL_SEARCH_ID, params=params)
         rows = _collect_rows(raw_data)
 
         # Transform raw data to Pydantic models
@@ -307,7 +307,7 @@ class BillService:
         try:
             # Call detail API with the numeric BILL_NO
             raw_data = await self.client.get_data(
-                service_id=detail_service_id,
+                service_id_or_name=detail_service_id,
                 params={"BILL_NO": bill_identifier},
             )
 
@@ -350,7 +350,7 @@ class MemberService:
         Search for member information by name.
         """
         params = {"NAAS_NM": name}
-        raw_data = await self.client.get_data(service_id=self.MEMBER_INFO_ID, params=params)
+        raw_data = await self.client.get_data(service_id_or_name=self.MEMBER_INFO_ID, params=params)
         rows = _collect_rows(raw_data)
 
         if not name:
@@ -377,7 +377,7 @@ class MeetingService:
         # OOWY4R001216HX11492: 의안 위원회심사 회의정보 조회
         bill_meeting_id = "OOWY4R001216HX11492"
         params = {"BILL_ID": bill_id}
-        raw_data = await self.client.get_data(service_id=bill_meeting_id, params=params)
+        raw_data = await self.client.get_data(service_id_or_name=bill_meeting_id, params=params)
         return _collect_rows(raw_data)
 
     async def search_meetings(
@@ -417,7 +417,9 @@ class MeetingService:
         # Use configured default assembly age
         params["DAE_NUM"] = settings.default_assembly_age
 
-        raw_data = await self.client.get_data(service_id=self.MEETING_INFO_ID, params=params)
+        raw_data = await self.client.get_data(
+            service_id_or_name=self.MEETING_INFO_ID, params=params
+        )
         rows = _collect_rows(raw_data)
 
         # Post-filtering if needed (e.g. date range)
@@ -447,7 +449,9 @@ class CommitteeService:
         if committee_name:
             params["COMMITTEE_NAME"] = committee_name
 
-        raw_data = await self.client.get_data(service_id=self.COMMITTEE_INFO_ID, params=params)
+        raw_data = await self.client.get_data(
+            service_id_or_name=self.COMMITTEE_INFO_ID, params=params
+        )
         rows = _collect_rows(raw_data)
 
         committees = []

@@ -49,7 +49,7 @@ async def test_search_meetings_by_committee(meeting_service, mock_client):
     # Verify API call
     mock_client.get_data.assert_called_once()
     call_args = mock_client.get_data.call_args
-    assert call_args.kwargs["service_id"] == "OR137O001023MZ19321"
+    assert call_args.kwargs["service_id_or_name"] == "OR137O001023MZ19321"
     assert call_args.kwargs["params"]["COMM_NAME"] == "법제사법위원회"
 
 

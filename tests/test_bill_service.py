@@ -56,7 +56,7 @@ async def test_get_bill_info_success(bill_service, mock_client):
     # Verify API call parameters
     mock_client.get_data.assert_called_once()
     call_args = mock_client.get_data.call_args
-    assert call_args.kwargs["service_id"] == "O4K6HM0012064I15889"
+    assert call_args.kwargs["service_id_or_name"] == "O4K6HM0012064I15889"
     assert call_args.kwargs["params"]["AGE"] == "21"
     assert call_args.kwargs["params"]["pSize"] == 1
 
@@ -71,7 +71,7 @@ async def test_search_bills_fallback(bill_service, mock_client):
     # Mock second call (age 21) returning results
 
     # We need to handle multiple calls to get_data with different params
-    async def side_effect(service_id, params, **kwargs):
+    async def side_effect(service_id_or_name, params, **kwargs):
         if params.get("AGE") == "22":
             return {}
         if params.get("AGE") == "21":
@@ -150,10 +150,10 @@ async def test_get_bill_details(bill_service, mock_client):
         ]
     }
 
-    async def side_effect(service_id, params, **kwargs):
-        if service_id == bill_service.BILL_SEARCH_ID:
+    async def side_effect(service_id_or_name, params, **kwargs):
+        if service_id_or_name == bill_service.BILL_SEARCH_ID:
             return basic_response
-        if service_id == bill_service.BILL_DETAIL_ID:
+        if service_id_or_name == bill_service.BILL_DETAIL_ID:
             # Verify that BILL_NO is being used (not BILL_ID)
             assert "BILL_NO" in params
             assert params["BILL_NO"] == "2200001"
@@ -254,10 +254,10 @@ async def test_get_bill_details_uses_bill_no(bill_service, mock_client):
 
     call_params = {}
 
-    async def side_effect(service_id, params, **kwargs):
-        if service_id == bill_service.BILL_SEARCH_ID:
+    async def side_effect(service_id_or_name, params, **kwargs):
+        if service_id_or_name == bill_service.BILL_SEARCH_ID:
             return basic_response
-        if service_id == bill_service.BILL_DETAIL_ID:
+        if service_id_or_name == bill_service.BILL_DETAIL_ID:
             # Capture the params to verify later
             call_params.update(params)
             return detail_response
