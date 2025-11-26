@@ -119,3 +119,23 @@ uv run pytest
 ## 라이선스
 
 MIT
+
+---
+
+## 배포 (Deployment)
+
+이 서버는 Docker를 사용하여 Railway, Render, Fly.io 등 클라우드 플랫폼에 쉽게 배포할 수 있습니다.
+
+### Docker 배포
+
+1. **Dockerfile**이 포함되어 있어 별도 설정 없이 바로 빌드할 수 있습니다.
+2. 배포 시 환경 변수 `ASSEMBLY_API_KEY`를 반드시 설정해야 합니다.
+3. 서버는 기본적으로 `SSE` 모드(`MCP_TRANSPORT=sse`)로 실행되며 `8000` 포트를 사용합니다.
+
+### Railway 배포 예시
+
+1. GitHub 리포지토리를 Railway에 연결합니다.
+2. Variables 설정에서 `ASSEMBLY_API_KEY`를 추가합니다.
+3. 자동으로 Dockerfile을 감지하여 빌드 및 배포됩니다.
+4. 생성된 URL (예: `https://assembly-mcp.up.railway.app`) 뒤에 `/sse`를 붙여 MCP 클라이언트에 등록합니다.
+   - MCP Server URL: `https://assembly-mcp.up.railway.app/sse`
