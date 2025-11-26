@@ -71,13 +71,33 @@ class DiscoveryService:
         results.sort(key=lambda x: x["name"])
         return results
 
-    async def call_raw(
-        self, service_id_or_name: str, params: dict[str, Any]
-    ) -> dict[str, Any] | str:
+    async def call_raw(self, service_id_or_name: str, params: dict[str, Any]) -> dict[str, Any]:
         """
         Call a specific API service with raw parameters.
         """
-        return await self.client.get_data(service_id_or_name=service_id_or_name, params=params)
+        try:
+            return await self.client.get_data(service_id_or_name=service_id_or_name, params=params)
+        except AssemblyAPIError as e:
+            error_msg = str(e)
+
+            # Enhance error message for missing required parameters
+            if "ERROR-300" in error_msg or "필수 값 누락" in error_msg or "필수" in error_msg:
+                params_list = list(params.keys()) if params else []
+                enhanced_msg = (
+                    f"API 호출 실패 - 필수 파라미터 누락: {error_msg}\n\n"
+                    f"📋 도움말:\n"
+                    f"1. get_api_spec('{service_id_or_name}')를 호출하여 필수 파라미터 확인\n"
+                    f"   (주의: 스펙 다운로드가 실패할 경우 공공데이터포털 확인 필요)\n"
+                    f"2. 공공데이터포털(data.go.kr)에서 "
+                    f"'{service_id_or_name}' API 명세서 직접 확인\n"
+                    f"3. list_api_services()로 API 설명 확인\n\n"
+                    f"현재 전달한 파라미터 ({len(params_list)}개): {params_list}\n"
+                    f"일반적인 필수 파라미터: KEY (API 키), pIndex (페이지), pSize (결과 수)"
+                )
+                raise AssemblyAPIError(enhanced_msg) from e
+
+            # Re-raise other API errors as-is
+            raise
 
 
 class BillService:
@@ -296,6 +316,7 @@ class BillService:
                     break
 
         if not target_bill:
+            logger.warning(f"Bill not found in search: {bill_id}")
             return None
 
         # 2. Get detail info (Reason & Content)
@@ -312,14 +333,31 @@ class BillService:
 
         try:
             # Call detail API with the numeric BILL_NO
+            logger.debug(
+                f"Fetching bill details: service_id={detail_service_id}, "
+                f"BILL_NO={bill_identifier}, bill_id={bill_id}"
+            )
+
             raw_data = await self.client.get_data(
                 service_id_or_name=detail_service_id,
                 params={"BILL_NO": bill_identifier},
             )
 
+            # Log raw response structure for debugging
+            if isinstance(raw_data, dict):
+                logger.debug(f"Detail API response keys: {list(raw_data.keys())[:10]}")
+            else:
+                logger.debug(f"Detail API response type: {type(raw_data)}")
+
             rows = _collect_rows(raw_data)
+
             if rows:
                 row = rows[0]
+                logger.debug(
+                    f"Detail row contains {len(row)} keys. Sample keys: {list(row.keys())[:10]}"
+                )
+
+                # Try to extract summary
                 summary = (
                     row.get("MAIN_CNTS")
                     or row.get("SUMMARY")
@@ -327,6 +365,8 @@ class BillService:
                     or row.get("MAJOR_CONTENT")
                     or row.get("MAIN_CONT")
                 )
+
+                # Try to extract reason
                 reason = (
                     row.get("RSON_CONT")
                     or row.get("PROPOSE_RSON")
@@ -334,14 +374,59 @@ class BillService:
                     or row.get("PROPOSE_REASON")
                     or row.get("RST_PROPOSE_REASON")
                 )
+
+                # If both fields are empty, provide diagnostic info
+                if not summary and not reason:
+                    available_keys = list(row.keys())[:15]
+                    logger.warning(
+                        f"Bill detail API returned data for {bill_identifier} but no "
+                        f"extractable summary/reason fields. Available keys: {available_keys}"
+                    )
+                    summary = (
+                        "[데이터 파싱 실패] API 응답 형식이 변경되었을 수 있습니다.\n"
+                        f"가용 필드 ({len(row)}개): {', '.join(available_keys)}\n\n"
+                        "공공데이터포털(data.go.kr)에서 최신 API 명세를 확인하거나, "
+                        "AssemblyMCP 이슈 트래커에 보고해주세요."
+                    )
+                elif not summary:
+                    logger.info(f"No summary found for bill {bill_identifier}, but reason exists")
+                elif not reason:
+                    logger.info(f"No reason found for bill {bill_identifier}, but summary exists")
+
+            else:
+                logger.warning(
+                    f"Bill detail API returned no data rows for BILL_NO={bill_identifier}. "
+                    "The API may have returned an empty response."
+                )
+                summary = (
+                    "[상세 정보 없음] API에서 데이터를 반환하지 않았습니다.\n"
+                    "가능한 원인:\n"
+                    "- 의안 번호가 상세 API에 아직 등록되지 않음\n"
+                    "- API 일시적 오류\n"
+                    "- 의안이 너무 오래되어 상세 정보가 제공되지 않음"
+                )
+
         except SpecParseError as e:
-            logger.warning(
-                "Spec not available for bill detail service %s: %s", detail_service_id, e
+            logger.warning(f"Spec not available for bill detail service {detail_service_id}: {e}")
+            summary = (
+                f"[API 스펙 로드 실패] {detail_service_id} 서비스의 명세를 불러올 수 없습니다.\n"
+                f"오류: {str(e)}\n\n"
+                "공공데이터포털에서 API 명세가 변경되었을 수 있습니다."
             )
         except AssemblyAPIError as e:
-            logger.warning("API error fetching bill details (%s): %s", detail_service_id, e)
+            logger.warning(f"API error fetching bill details ({detail_service_id}): {e}")
+            summary = (
+                f"[API 호출 오류] 의안 상세 정보를 가져올 수 없습니다.\n"
+                f"오류 메시지: {str(e)}\n\n"
+                "잠시 후 다시 시도하거나, 공공데이터 포털 상태를 확인해주세요."
+            )
         except Exception as e:
-            logger.exception("Unexpected error fetching bill details for %s: %s", bill_id, e)
+            logger.exception(f"Unexpected error fetching bill details for {bill_id}: {e}")
+            summary = (
+                f"[예상치 못한 오류] 의안 상세 정보 조회 중 오류가 발생했습니다.\n"
+                f"오류: {type(e).__name__}: {str(e)}\n\n"
+                "이 문제가 지속되면 AssemblyMCP 이슈 트래커에 보고해주세요."
+            )
 
         return BillDetail(**target_bill.model_dump(), summary=summary, reason=reason)
 
@@ -430,6 +515,11 @@ class MeetingService:
         )
         rows = _collect_rows(raw_data)
 
+        logger.debug(
+            f"Meeting search returned {len(rows)} raw results for filters: "
+            f"committee={committee_name}, date_start={date_start}, date_end={date_end}"
+        )
+
         # Post-filtering if needed (e.g. date range)
         filtered = []
         for row in rows:
@@ -440,7 +530,17 @@ class MeetingService:
                 continue
             filtered.append(row)
 
-        return filtered[:limit]
+        result = filtered[:limit]
+
+        if not result:
+            logger.info(
+                f"No meeting records found. Filters used: "
+                f"committee='{committee_name}', date_start='{date_start}', "
+                f"date_end='{date_end}', page={page}. "
+                f"Raw results before filtering: {len(rows)}, after filtering: {len(filtered)}"
+            )
+
+        return result
 
 
 class CommitteeService:

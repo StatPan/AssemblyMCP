@@ -146,7 +146,34 @@ async def get_api_spec(service_id: str) -> dict[str, Any]:
         return spec.to_dict()
     except Exception as e:
         logger.error(f"Failed to get spec for {service_id}: {e}")
-        return {"error": str(e), "service_id": service_id}
+
+        # Provide detailed troubleshooting information
+        cache_dir = "unknown"
+        if hasattr(client.spec_parser, "cache_dir"):
+            cache_dir = str(client.spec_parser.cache_dir)
+
+        error_response = {
+            "error": str(e),
+            "error_type": type(e).__name__,
+            "service_id": service_id,
+            "help": (
+                "스펙 파일 다운로드에 실패했습니다. 가능한 원인:\n\n"
+                "1. 공공데이터 포털의 스펙 파일 형식이 변경됨\n"
+                "   → 다운로드된 파일이 Excel이 아닌 HTML 오류 페이지일 수 있습니다.\n\n"
+                "2. 네트워크 문제 또는 일시적인 서버 오류\n"
+                "   → 잠시 후 다시 시도해보세요.\n\n"
+                "3. 서비스 ID가 유효하지 않음\n"
+                "   → list_api_services()로 올바른 서비스 ID를 확인하세요.\n\n"
+                "대안 방법:\n"
+                "- list_api_services()로 서비스 기본 정보 확인\n"
+                "- 공공데이터포털(data.go.kr)에서 API 명세 직접 확인\n"
+                "- call_api_raw()로 파라미터를 추정하여 시도 (고급 사용자)"
+            ),
+            "spec_cache_location": cache_dir,
+            "suggested_action": "Try: list_api_services(keyword='') to see all available services",
+        }
+
+        return error_response
 
 
 @mcp.tool()
@@ -348,6 +375,13 @@ async def search_meetings(
 ) -> list[dict[str, Any]]:
     """
     Search for committee meetings.
+
+    Note: This API often returns empty results due to strict filtering or limited data availability.
+    For better results:
+    - Use recent dates (within last 6 months)
+    - Try without date filters first to see available data
+    - Use get_committee_list() to get exact committee names
+    - Be aware that meeting data may not be immediately available after meetings
 
     Args:
         committee_name: Name of the committee (e.g., "법제사법위원회").
