@@ -54,6 +54,16 @@ async def test_search_meetings_by_committee(meeting_service, mock_client):
 
 
 @pytest.mark.asyncio
+async def test_search_meetings_pagination(meeting_service, mock_client):
+    mock_client.get_data = AsyncMock(return_value={"row": []})
+
+    await meeting_service.search_meetings(page=3)
+
+    call_args = mock_client.get_data.call_args
+    assert call_args.kwargs["params"]["pIndex"] == 3
+
+
+@pytest.mark.asyncio
 async def test_search_meetings_by_date_range(meeting_service, mock_client):
     # Mock API response with dates outside range
     mock_response = {
