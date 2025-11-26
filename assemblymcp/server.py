@@ -435,7 +435,15 @@ def main():
             "ASSEMBLY_API_KEY is not configured. The server will run but tools will fail."
         )
 
-    mcp.run(show_banner=False)
+    # Check for transport configuration
+    transport = os.getenv("MCP_TRANSPORT", "stdio").lower()
+
+    if transport == "sse":
+        logger.info("Starting AssemblyMCP in SSE mode")
+        mcp.run(transport="sse")
+    else:
+        logger.info("Starting AssemblyMCP in stdio mode")
+        mcp.run(transport="stdio")
 
 
 if __name__ == "__main__":

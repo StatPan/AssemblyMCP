@@ -28,7 +28,7 @@ wheels = [
 [[package]]
 name = "assembly-api-client"
 version = "0.1.1"
-source = { git = "https://github.com/StatPan/assembly-api-client.git#e34027a43a2a64ec196ebd86317a2a17049e68b9" }
+source = { git = "https://github.com/StatPan/assembly-api-client.git?rev=fa9aec96cbfc17c2146e127a900f220c4182bd14#fa9aec96cbfc17c2146e127a900f220c4182bd14" }
 dependencies = [
     { name = "httpx" },
     { name = "openpyxl" },
@@ -55,6 +55,7 @@ dependencies = [
     { name = "requests" },
     { name = "tenacity" },
     { name = "typer" },
+    { name = "uvicorn" },
 ]
 
 [package.dev-dependencies]
@@ -67,7 +68,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "assembly-api-client", git = "https://github.com/StatPan/assembly-api-client.git" },
+    { name = "assembly-api-client", git = "https://github.com/StatPan/assembly-api-client.git?rev=fa9aec96cbfc17c2146e127a900f220c4182bd14" },
     { name = "beautifulsoup4", specifier = ">=4.14.2" },
     { name = "fastmcp", specifier = ">=2.13.1" },
     { name = "httpx", specifier = ">=0.28.1" },
@@ -78,6 +79,7 @@ requires-dist = [
     { name = "requests", specifier = ">=2.32.5" },
     { name = "tenacity", specifier = ">=9.1.2" },
     { name = "typer", specifier = ">=0.20.0" },
+    { name = "uvicorn", specifier = ">=0.32.1" },
 ]
 
 [package.metadata.requires-dev]
