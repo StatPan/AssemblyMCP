@@ -71,11 +71,13 @@ class DiscoveryService:
         results.sort(key=lambda x: x["name"])
         return results
 
-    async def call_raw(self, service_id: str, params: dict[str, Any]) -> dict[str, Any] | str:
+    async def call_raw(
+        self, service_id_or_name: str, params: dict[str, Any]
+    ) -> dict[str, Any] | str:
         """
         Call a specific API service with raw parameters.
         """
-        return await self.client.get_data(service_id_or_name=service_id, params=params)
+        return await self.client.get_data(service_id_or_name=service_id_or_name, params=params)
 
 
 class BillService:
@@ -210,6 +212,7 @@ class BillService:
         bill_name: str | None = None,
         propose_dt: str | None = None,
         proc_status: str | None = None,
+        page: int = 1,
         limit: int = 10,
     ) -> list[Bill]:
         """
@@ -222,6 +225,7 @@ class BillService:
             "BILL_NAME": bill_name,
             "PROPOSE_DT": propose_dt,
             "PROC_RESULT_CD": proc_status,
+            "pIndex": page,
             "pSize": limit,
         }
         # Filter out None values
@@ -241,53 +245,55 @@ class BillService:
 
         return bills[:limit]
 
-    async def search_bills(self, keyword: str) -> list[Bill]:
+    async def search_bills(self, keyword: str, page: int = 1, limit: int = 10) -> list[Bill]:
         """
         Smart search for bills.
         1. Tries to search by keyword in the current session (22nd).
         2. If no results, falls back to the previous session (21st).
         """
         # Try current session first
-        bills = await self.get_bill_info(age="22", bill_name=keyword)
+        bills = await self.get_bill_info(age="22", bill_name=keyword, page=page, limit=limit)
         if bills:
             return bills
 
         # Fallback to previous session
-        bills = await self.get_bill_info(age="21", bill_name=keyword)
+        bills = await self.get_bill_info(age="21", bill_name=keyword, page=page, limit=limit)
         return bills
 
-    async def get_recent_bills(self, limit: int = 10) -> list[Bill]:
+    async def get_recent_bills(self, page: int = 1, limit: int = 10) -> list[Bill]:
         """
         Get the most recent bills from the current session.
         """
         # Fetch a slightly larger batch to ensure good sorting if API doesn't sort perfectly
-        bills = await self.get_bill_info(age="22", limit=max(limit, 20))
+        bills = await self.get_bill_info(age="22", page=page, limit=max(limit, 20))
 
         # Sort by proposal date descending (ISO format strings sort correctly)
         bills.sort(key=lambda x: x.propose_dt if x.propose_dt else "", reverse=True)
 
         return bills[:limit]
 
-    async def get_bill_details(self, bill_id: str) -> BillDetail | None:
+    async def get_bill_details(self, bill_id: str, age: str | None = None) -> BillDetail | None:
         """
         Get detailed information for a specific bill, including summary and proposal reason.
         Args:
             bill_id: Can be either BILL_ID (alphanumeric) or BILL_NO (numeric)
+            age: Optional legislative session age (e.g., "22"). If provided, skips probing.
         """
         # 1. Get basic info first
-        # We don't know the age, so we might need to search or guess.
-        # For now, let's try the current session, then previous.
-        # Actually, get_bill_info allows passing just bill_id if the API supports it,
-        # but the Bill Search API usually requires AGE.
-        # However, we can try to find it.
-
-        # Strategy: Try to find the bill in recent sessions
         target_bill = None
-        for age in ["22", "21"]:
+
+        if age:
+            # If age is known, search directly
             bills = await self.get_bill_info(age=age, bill_id=bill_id)
             if bills:
                 target_bill = bills[0]
-                break
+        else:
+            # Strategy: Try to find the bill in recent sessions
+            for probe_age in ["22", "21"]:
+                bills = await self.get_bill_info(age=probe_age, bill_id=bill_id)
+                if bills:
+                    target_bill = bills[0]
+                    break
 
         if not target_bill:
             return None
@@ -385,6 +391,7 @@ class MeetingService:
         committee_name: str | None = None,
         date_start: str | None = None,
         date_end: str | None = None,
+        page: int = 1,
         limit: int = 10,
     ) -> list[dict[str, Any]]:
         """
@@ -394,10 +401,11 @@ class MeetingService:
             committee_name: Name of the committee (e.g., "법제사법위원회")
             date_start: Start date (YYYY-MM-DD)
             date_end: End date (YYYY-MM-DD)
+            page: Page number (default 1)
             limit: Max results
         """
         # Fetch larger batch (max 100) to ensure filtering doesn't reduce results too much
-        params = {"pSize": 100}
+        params = {"pIndex": page, "pSize": 100}
 
         if committee_name:
             params["COMM_NAME"] = committee_name

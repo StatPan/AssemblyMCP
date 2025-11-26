@@ -28,7 +28,7 @@ wheels = [
 [[package]]
 name = "assembly-api-client"
 version = "0.1.1"
-source = { git = "file:///media/statpan/e4ea1c27-dbd6-45ac-95d8-5cd440cc1664/workspace/assembly-api-client#e34027a43a2a64ec196ebd86317a2a17049e68b9" }
+source = { git = "https://github.com/StatPan/assembly-api-client.git#e34027a43a2a64ec196ebd86317a2a17049e68b9" }
 dependencies = [
     { name = "httpx" },
     { name = "openpyxl" },
@@ -67,7 +67,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "assembly-api-client", git = "file:///media/statpan/e4ea1c27-dbd6-45ac-95d8-5cd440cc1664/workspace/assembly-api-client" },
+    { name = "assembly-api-client", git = "https://github.com/StatPan/assembly-api-client.git" },
     { name = "beautifulsoup4", specifier = ">=4.14.2" },
     { name = "fastmcp", specifier = ">=2.13.1" },
     { name = "httpx", specifier = ">=0.28.1" },

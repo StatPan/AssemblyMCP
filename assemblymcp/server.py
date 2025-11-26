@@ -185,7 +185,7 @@ async def call_api_raw(service_id: str, params: str = "{}") -> str:
 
     try:
         service = _require_service(discovery_service)
-        data = await service.call_raw(service_id=service_id, params=param_dict)
+        data = await service.call_raw(service_id_or_name=service_id, params=param_dict)
         return json.dumps(data, ensure_ascii=False, indent=2)
     except AssemblyAPIError as e:
         logger.error(f"API error calling service '{service_id}': {e}")
@@ -204,6 +204,7 @@ async def get_bill_info(
     bill_name: str | None = None,
     propose_dt: str | None = None,
     proc_status: str | None = None,
+    page: int = 1,
     limit: int = 10,
 ) -> list[dict[str, Any]]:
     """
@@ -217,6 +218,7 @@ async def get_bill_info(
         bill_name: 의안명 (BILL_NAME).
         propose_dt: 제안일자 (PROPOSE_DT). YYYYMMDD format.
         proc_status: 처리상태 (PROC_STATUS).
+        page: Page number (default 1).
         limit: Max results (default 10).
 
     Returns:
@@ -229,13 +231,14 @@ async def get_bill_info(
         bill_name=bill_name,
         propose_dt=propose_dt,
         proc_status=proc_status,
+        page=page,
         limit=limit,
     )
     return [bill.model_dump() for bill in bills]
 
 
 @mcp.tool(output_schema=bill_list_output_schema())
-async def search_bills(keyword: str) -> list[dict[str, Any]]:
+async def search_bills(keyword: str, page: int = 1, limit: int = 10) -> list[dict[str, Any]]:
     """
     Search for bills by keyword.
     Automatically searches the current legislative session (22nd),
@@ -247,17 +250,19 @@ async def search_bills(keyword: str) -> list[dict[str, Any]]:
 
     Args:
         keyword: Search term (e.g., "artificial intelligence", "budget").
+        page: Page number (default 1).
+        limit: Max results (default 10).
 
     Returns:
         List of matching bills.
     """
     service = _require_service(bill_service)
-    bills = await service.search_bills(keyword)
+    bills = await service.search_bills(keyword, page=page, limit=limit)
     return [bill.model_dump() for bill in bills]
 
 
 @mcp.tool(output_schema=bill_list_output_schema())
-async def get_recent_bills(limit: int = 10) -> list[dict[str, Any]]:
+async def get_recent_bills(page: int = 1, limit: int = 10) -> list[dict[str, Any]]:
     """
     Get the most recently proposed bills.
     Useful for answering "what's new" or "latest bills".
@@ -267,18 +272,19 @@ async def get_recent_bills(limit: int = 10) -> list[dict[str, Any]]:
     from the result and call 'get_bill_details(bill_id)'.
 
     Args:
+        page: Page number (default 1).
         limit: Number of bills to return (default 10).
 
     Returns:
         List of bills sorted by proposal date (newest first).
     """
     service = _require_service(bill_service)
-    bills = await service.get_recent_bills(limit)
+    bills = await service.get_recent_bills(page=page, limit=limit)
     return [bill.model_dump() for bill in bills]
 
 
 @mcp.tool(output_schema=bill_detail_output_schema())
-async def get_bill_details(bill_id: str) -> dict[str, Any] | None:
+async def get_bill_details(bill_id: str, age: str | None = None) -> dict[str, Any] | None:
     """
     Get detailed information about a specific bill.
     Includes the bill's summary (main content) and reason for proposal.
@@ -290,12 +296,13 @@ async def get_bill_details(bill_id: str) -> dict[str, Any] | None:
 
     Args:
         bill_id: The ID of the bill (e.g., '2100001').
+        age: Optional legislative session age (e.g., "22"). If provided, skips probing.
 
     Returns:
         BillDetail object containing summary and reason, or None if not found.
     """
     service = _require_service(bill_service)
-    details = await service.get_bill_details(bill_id)
+    details = await service.get_bill_details(bill_id, age=age)
     return details.model_dump() if details else None
 
 
@@ -336,6 +343,7 @@ async def search_meetings(
     committee_name: str | None = None,
     date_start: str | None = None,
     date_end: str | None = None,
+    page: int = 1,
     limit: int = 10,
 ) -> list[dict[str, Any]]:
     """
@@ -345,6 +353,7 @@ async def search_meetings(
         committee_name: Name of the committee (e.g., "법제사법위원회").
         date_start: Start date (YYYY-MM-DD).
         date_end: End date (YYYY-MM-DD).
+        page: Page number (default 1).
         limit: Max results (default 10).
 
     Returns:
@@ -355,6 +364,7 @@ async def search_meetings(
         committee_name=committee_name,
         date_start=date_start,
         date_end=date_end,
+        page=page,
         limit=limit,
     )
 
