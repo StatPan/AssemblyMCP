@@ -610,7 +610,7 @@ class CommitteeService:
         )
         rows = _collect_rows(raw_data)
 
-        # If name was provided, apply best-effort filter in case the API doesn't support fuzzy matching
+        # If a name was provided, post-filter in case the API lacks fuzzy matching
         if committee_name:
             normalized = re.sub(r"\s+", "", committee_name)
             filtered = []
