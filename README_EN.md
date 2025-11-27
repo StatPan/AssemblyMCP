@@ -21,6 +21,7 @@ This server provides the following tools:
     *   `get_meeting_records(bill_id)`: Get committee meeting records related to a specific bill.
     *   `search_meetings(...)`: Search meeting records by date, committee name, etc.
     *   `get_committee_list()`: Get a list of National Assembly committees.
+    *   `get_committee_members(...)`: Get the roster (member list) of a committee.
 
 *   **Member Information**
     *   `get_member_info(name)`: Get details about a National Assembly member (party, constituency, etc.).
@@ -29,6 +30,15 @@ This server provides the following tools:
     *   `get_assembly_info()`: Check server status and available API info.
     *   `list_api_services()`: Search for all available API services.
     *   `call_api_raw()`: (Advanced) Call API services directly with custom parameters.
+
+## LLM Usage Guide (Important)
+
+- The server can reach **~270 National Assembly OpenAPI endpoints**. If a high-level tool is missing, do NOT answer “not supported.”
+- Default pattern: `list_api_services(keyword)` → `get_api_spec(service_id)` → `call_api_raw(service_id, params)`. This lets you fetch any dataset.
+- Search with broad keywords (Korean/English, spacing variants). Use `get_api_spec` to confirm required params, then call via `call_api_raw`.
+- Example: “committee members” → search `list_api_services("위원 명단" or "committee member")` → inspect with `get_api_spec` → fetch with `call_api_raw` → enrich individuals via `get_member_info`.
+- When replying: if a high-level tool is absent, propose this workflow or directly chain the calls to produce the answer.
+- Shortcut: committee rosters are available directly via `get_committee_members`, then enrich individuals via `get_member_info`.
 
 ---
 

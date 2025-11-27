@@ -21,6 +21,7 @@ Claude와 같은 AI 에이전트가 국회의 의안, 회의록, 의원 정보 �
     *   `get_meeting_records(bill_id)`: 특정 의안과 관련된 위원회 회의록을 조회합니다.
     *   `search_meetings(...)`: 날짜, 위원회명 등으로 회의록을 검색합니다.
     *   `get_committee_list()`: 국회 위원회 목록을 조회합니다.
+    *   `get_committee_members(...)`: 위원회 구성원(위원 명단)을 조회합니다.
 
 *   **국회의원 정보**
     *   `get_member_info(name)`: 국회의원의 인적 사항, 소속 정당, 지역구 등을 조회합니다.
@@ -29,6 +30,15 @@ Claude와 같은 AI 에이전트가 국회의 의안, 회의록, 의원 정보 �
     *   `get_assembly_info()`: 서버 상태 및 사용 가능한 API 정보를 확인합니다.
     *   `list_api_services()`: 사용 가능한 모든 국회 API 서비스를 검색합니다.
     *   `call_api_raw()`: (고급 사용자용) API 서비스를 직접 호출합니다.
+
+## LLM 사용 가이드 (중요)
+
+- 이 서버는 국회 OpenAPI **약 270개**를 모두 사용할 수 있습니다. 고수준 툴에 없다고 해서 “기능이 없다”라고 답하지 마세요.
+- 기본 전략: `list_api_services(keyword)` → `get_api_spec(service_id)` → `call_api_raw(service_id, params)` 조합으로 어떤 정보든 조회할 수 있습니다.
+- 키워드는 넓게 검색하세요(국문/영문, 띄어쓰기 변형). 찾은 ID는 `get_api_spec`으로 필수 파라미터를 확인한 뒤 `call_api_raw`로 호출합니다.
+- 예시: “위원회 구성원” → `list_api_services("위원 명단")`에서 서비스 ID 확인 → `get_api_spec`으로 파라미터 확인 → `call_api_raw`로 명단 조회 → 필요 시 `get_member_info`로 개별 의원 상세를 보강.
+- 답변 시: 고수준 툴에 없으면 위 조합을 제안하거나 직접 호출해 결과를 만들어 주세요.
+- 빠른 길: 위원 명단은 `get_committee_members`로 바로 조회할 수 있으며, 후속으로 `get_member_info`로 상세를 붙이면 됩니다.
 
 ---
 

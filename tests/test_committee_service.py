@@ -72,3 +72,44 @@ async def test_get_committee_list_filter(committee_service, mock_client):
     mock_client.get_data.assert_called_once()
     call_args = mock_client.get_data.call_args
     assert call_args.kwargs["params"]["COMMITTEE_NAME"] == "법제사법위원회"
+
+
+@pytest.mark.asyncio
+async def test_get_committee_members_by_code(committee_service, mock_client):
+    mock_response = {
+        "OCAJQ4001000LI18751": [
+            {
+                "head": [{"RESULT": {"CODE": "INFO-000", "MESSAGE": "Success"}}],
+                "row": [
+                    {"COMMITTEE_NAME": "법제사법위원회", "HR_DEPT_CD": "9700008", "HG_NM": "홍길동"},
+                    {"COMMITTEE_NAME": "법제사법위원회", "HR_DEPT_CD": "9700008", "HG_NM": "임꺽정"},
+                ],
+            }
+        ]
+    }
+    mock_client.get_data = AsyncMock(return_value=mock_response)
+
+    rows = await committee_service.get_committee_members(committee_code="9700008", limit=10)
+
+    assert len(rows) == 2
+    mock_client.get_data.assert_called_once()
+    call_args = mock_client.get_data.call_args
+    assert call_args.kwargs["service_id_or_name"] == "OCAJQ4001000LI18751"
+    assert call_args.kwargs["params"]["HR_DEPT_CD"] == "9700008"
+
+
+@pytest.mark.asyncio
+async def test_get_committee_members_filter_by_name(committee_service, mock_client):
+    mock_response = {
+        "row": [
+            {"COMMITTEE_NAME": "법제사법위원회", "HG_NM": "홍길동"},
+            {"COMMITTEE_NAME": "정무위원회", "HG_NM": "임꺽정"},
+        ]
+    }
+    mock_client.get_data = AsyncMock(return_value=mock_response)
+
+    rows = await committee_service.get_committee_members(committee_name="법제사법위원회", limit=5)
+
+    # Should keep only the matching committee rows after post-filter
+    assert len(rows) == 1
+    assert rows[0]["HG_NM"] == "홍길동"
