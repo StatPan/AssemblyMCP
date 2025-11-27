@@ -19,6 +19,7 @@ from assembly_client.api import AssemblyAPIClient
 from assembly_client.errors import AssemblyAPIError, SpecParseError
 from fastmcp import FastMCP
 
+from assemblymcp.initialization import ensure_master_list
 from assemblymcp.schemas import bill_detail_output_schema, bill_list_output_schema
 from assemblymcp.services import (
     BillService,
@@ -53,8 +54,24 @@ except Exception as e:
     logger.error(f"Failed to initialize client: {e}")
     client = None
 
+
 # Initialize Services
 if client:
+    # Ensure master list is available
+    import asyncio
+
+    try:
+        # We need to run this async function in the sync startup context.
+        # FastMCP doesn't have a dedicated "on_startup" hook that is easily accessible
+        # in this global scope without blocking import.
+        # However, for the tools to work, we need this data.
+        # We'll run it synchronously here using asyncio.run if no loop exists,
+        # or just schedule it?
+        # Safest is to run it and block briefly.
+        asyncio.run(ensure_master_list(client))
+    except Exception as e:
+        logger.error(f"Failed to initialize master list: {e}")
+
     discovery_service = DiscoveryService(client)
     bill_service = BillService(client)
     member_service = MemberService(client)
