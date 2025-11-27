@@ -81,8 +81,16 @@ async def test_get_committee_members_by_code(committee_service, mock_client):
             {
                 "head": [{"RESULT": {"CODE": "INFO-000", "MESSAGE": "Success"}}],
                 "row": [
-                    {"COMMITTEE_NAME": "법제사법위원회", "HR_DEPT_CD": "9700008", "HG_NM": "홍길동"},
-                    {"COMMITTEE_NAME": "법제사법위원회", "HR_DEPT_CD": "9700008", "HG_NM": "임꺽정"},
+                    {
+                        "COMMITTEE_NAME": "법제사법위원회",
+                        "HR_DEPT_CD": "9700008",
+                        "HG_NM": "홍길동",
+                    },
+                    {
+                        "COMMITTEE_NAME": "법제사법위원회",
+                        "HR_DEPT_CD": "9700008",
+                        "HG_NM": "임꺽정",
+                    },
                 ],
             }
         ]

@@ -3,7 +3,6 @@
 
 import json
 import sys
-import time
 
 import httpx
 
@@ -116,7 +115,7 @@ def test_streamable_http(base_url: str):
                     for tool in tools[:3]:  # Show first 3
                         print(f"  - {tool.get('name')}: {tool.get('description', '')[:60]}...")
                 else:
-                    print(f"⚠️  Unexpected response format")
+                    print("⚠️  Unexpected response format")
             else:
                 print(f"❌ Failed: Status {response.status_code}")
                 return False
@@ -152,7 +151,8 @@ def test_streamable_http(base_url: str):
             if response.status_code == 200:
                 data = parse_sse_response(response.text)
                 if data:
-                    print(f"✅ Tool call response: {json.dumps(data, indent=2, ensure_ascii=False)}")
+                    print("✅ Tool call response:")
+                    print(json.dumps(data, indent=2, ensure_ascii=False))
             else:
                 print(f"⚠️  Tool call failed: Status {response.status_code}")
 
