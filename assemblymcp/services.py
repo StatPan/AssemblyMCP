@@ -317,13 +317,7 @@ class BillService:
             # Heuristic: If ID is numeric and length is around 7, it's likely a BILL_NO.
             is_numeric_id = bill_id.isdigit() and len(bill_id) < 10
 
-            if is_numeric_id:
-                # We can't easily search by BILL_NO in the general search API (O4K6HM0012064I15889)
-                # without iterating. But we can try to call the DETAIL API directly if we assume
-                # it's a BILL_NO.
-                # Let's try to construct a dummy Bill object if we can fetch details directly.
-                pass
-            else:
+            if not is_numeric_id:
                 for probe_age in ["22", "21"]:
                     bills = await self.get_bill_info(age=probe_age, bill_id=bill_id)
                     if bills:
@@ -467,7 +461,6 @@ class BillService:
 
 class MemberService:
     def __init__(self, client: AssemblyAPIClient):
-        self.client = client
         self.client = client
         # NWVRRE001000000001: 국회의원 인적사항 (Member Personal Info)
         # This seems to be the correct one for searching by name.
