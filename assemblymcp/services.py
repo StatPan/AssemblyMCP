@@ -548,6 +548,8 @@ class CommitteeService:
         self.client = client
         # O2Q4ZT001004PV11014: 위원회 현황 정보 (Committee Status Info)
         self.COMMITTEE_INFO_ID = "O2Q4ZT001004PV11014"
+        # OCAJQ4001000LI18751: 위원회 위원 명단 (Committee Member Roster)
+        self.COMMITTEE_MEMBER_LIST_ID = "OCAJQ4001000LI18751"
 
     async def get_committee_list(self, committee_name: str | None = None) -> list[Committee]:
         """
@@ -581,3 +583,41 @@ class CommitteeService:
                 logger.warning(f"Unexpected error parsing committee row: {e}", exc_info=True)
 
         return committees
+
+    async def get_committee_members(
+        self,
+        committee_code: str | None = None,
+        committee_name: str | None = None,
+        page: int = 1,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """
+        Get roster (members) for a committee.
+
+        The underlying API accepts either committee code (HR_DEPT_CD) or committee name.
+        This helper tries both and also post-filters by name to maximize recall.
+        """
+        params: dict[str, Any] = {"pIndex": page, "pSize": min(limit, 100)}
+
+        # Prefer explicit code when provided
+        if committee_code:
+            params["HR_DEPT_CD"] = committee_code
+        if committee_name:
+            params["COMMITTEE_NAME"] = committee_name
+
+        raw_data = await self.client.get_data(
+            service_id_or_name=self.COMMITTEE_MEMBER_LIST_ID, params=params
+        )
+        rows = _collect_rows(raw_data)
+
+        # If name was provided, apply best-effort filter in case the API doesn't support fuzzy matching
+        if committee_name:
+            normalized = re.sub(r"\s+", "", committee_name)
+            filtered = []
+            for row in rows:
+                row_name = re.sub(r"\s+", "", str(row.get("COMMITTEE_NAME", "")))
+                if normalized in row_name:
+                    filtered.append(row)
+            rows = filtered or rows
+
+        return rows[:limit]
