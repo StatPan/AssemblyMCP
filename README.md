@@ -137,5 +137,11 @@ MIT
 1. GitHub 리포지토리를 Railway에 연결합니다.
 2. Variables 설정에서 `ASSEMBLY_API_KEY`를 추가합니다.
 3. 자동으로 Dockerfile을 감지하여 빌드 및 배포됩니다.
-4. 생성된 URL (예: `https://assembly-mcp.up.railway.app`) 뒤에 `/sse`를 붙여 MCP 클라이언트에 등록합니다.
-   - MCP Server URL: `https://assembly-mcp.up.railway.app/sse`
+4. 생성된 URL (예: `https://assembly-mcp.up.railway.app`) 뒤에 `/mcp`를 붙여 MCP 클라이언트에 등록합니다.
+   - MCP Server URL: `https://assembly-mcp.up.railway.app/mcp`
+
+### 주요 변경사항
+
+- **Streamable HTTP Transport**: MCP 프로토콜의 최신 표준인 Streamable HTTP를 사용합니다 (SSE는 deprecated).
+- **엔드포인트**: `/mcp` 경로에서 MCP 서버가 실행됩니다.
+- **환경 변수**: `MCP_TRANSPORT=http`, `MCP_PATH=/mcp`로 설정됩니다.

@@ -23,9 +23,12 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 
 # Set working directory
 WORKDIR /home/appuser/app
+RUN mkdir -p /home/appuser/app && chown appuser:appuser /home/appuser/app
 
 # Copy configuration files and set ownership
 COPY --chown=appuser:appuser pyproject.toml uv.lock ./
+COPY --chown=appuser:appuser README.md ./
+COPY --chown=appuser:appuser assemblymcp ./assemblymcp
 
 # Switch to non-root user
 USER appuser
@@ -34,18 +37,17 @@ USER appuser
 # We use --frozen to ensure we use the lockfile
 RUN uv sync --frozen --no-dev
 
-# Copy application code
-COPY --chown=appuser:appuser assemblymcp ./assemblymcp
-COPY --chown=appuser:appuser README.md ./
-
 # Create directory for logs with correct permissions
 RUN mkdir -p /tmp/assemblymcp && chmod 755 /tmp/assemblymcp
 
 # Expose port (FastMCP default is 8000)
 EXPOSE 8000
 
-# Set transport to SSE
-ENV MCP_TRANSPORT=sse
+# Set transport to Streamable HTTP (the new MCP standard)
+ENV MCP_TRANSPORT=http
+ENV MCP_HOST=0.0.0.0
+ENV MCP_PORT=8000
+ENV MCP_PATH=/mcp
 
 # Run the application
 # We use 'uv run' to ensure we use the correct environment

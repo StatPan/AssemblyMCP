@@ -43,6 +43,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Initialize FastMCP server
+# CORS is automatically handled by FastMCP for Streamable HTTP
 mcp = FastMCP("AssemblyMCP")
 
 # Initialize API Client globally to load specs once
@@ -438,11 +439,19 @@ def main():
     # Check for transport configuration
     transport = os.getenv("MCP_TRANSPORT", "stdio").lower()
 
-    if transport != "sse":
-        transport = "stdio"
+    # Normalize transport names
+    if transport in ("http", "streamable-http", "sse"):
+        # Use Streamable HTTP (the new standard, replacing SSE)
+        host = os.getenv("MCP_HOST", "0.0.0.0")
+        port = int(os.getenv("MCP_PORT", "8000"))
+        path = os.getenv("MCP_PATH", "/mcp")
 
-    logger.info(f"Starting AssemblyMCP in {transport} mode")
-    mcp.run(transport=transport)
+        logger.info(f"Starting AssemblyMCP with Streamable HTTP on {host}:{port}{path}")
+        mcp.run(transport="http", host=host, port=port, path=path)
+    else:
+        # Default to stdio for local/desktop usage
+        logger.info("Starting AssemblyMCP in stdio mode")
+        mcp.run(transport="stdio")
 
 
 if __name__ == "__main__":
