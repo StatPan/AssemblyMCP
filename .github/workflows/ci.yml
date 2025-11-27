@@ -34,4 +34,4 @@ jobs:
     - name: Run Tests
       run: uv run pytest
       env:
-        ASSEMBLY_API_KEY: "dummy_key_for_ci"
+        ASSEMBLY_API_KEY: ${{ secrets.ASSEMBLY_API_KEY }}

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -19,6 +20,7 @@ from assembly_client.api import AssemblyAPIClient
 from assembly_client.errors import AssemblyAPIError, SpecParseError
 from fastmcp import FastMCP
 
+from assemblymcp.initialization import ensure_master_list
 from assemblymcp.schemas import bill_detail_output_schema, bill_list_output_schema
 from assemblymcp.services import (
     BillService,
@@ -53,8 +55,15 @@ except Exception as e:
     logger.error(f"Failed to initialize client: {e}")
     client = None
 
+
 # Initialize Services
 if client:
+    try:
+        asyncio.run(ensure_master_list(client))
+    except Exception as e:
+        logger.critical(f"Failed to initialize master list: {e}")
+        raise RuntimeError("Could not initialize master API list. Server cannot start.") from e
+
     discovery_service = DiscoveryService(client)
     bill_service = BillService(client)
     member_service = MemberService(client)

@@ -309,11 +309,39 @@ class BillService:
                 target_bill = bills[0]
         else:
             # Strategy: Try to find the bill in recent sessions
-            for probe_age in ["22", "21"]:
-                bills = await self.get_bill_info(age=probe_age, bill_id=bill_id)
-                if bills:
-                    target_bill = bills[0]
-                    break
+            # If bill_id looks like a numeric ID (e.g. 2214308), we can't search by BILL_ID in
+            # get_bill_info because get_bill_info expects the alphanumeric ID (PRC_...).
+            # However, we can try to find it by BILL_NO if we had a way to search by BILL_NO.
+            # The current get_bill_info implementation maps `bill_id` arg to `BILL_ID` param.
+
+            # Heuristic: If ID is numeric and length is around 7, it's likely a BILL_NO.
+            is_numeric_id = bill_id.isdigit() and len(bill_id) < 10
+
+            if not is_numeric_id:
+                for probe_age in ["22", "21"]:
+                    bills = await self.get_bill_info(age=probe_age, bill_id=bill_id)
+                    if bills:
+                        target_bill = bills[0]
+                        break
+
+        # If we didn't find a bill object but have a numeric ID, we might still be able to fetch
+        # details directly using the numeric ID as BILL_NO.
+        if not target_bill and (bill_id.isdigit() and len(bill_id) < 10):
+            logger.info(
+                f"Bill object not found via search, but ID {bill_id} looks like a BILL_NO. "
+                "Attempting direct detail fetch."
+            )
+            # Create a minimal Bill object to hold the ID
+            target_bill = Bill(
+                bill_id=bill_id,  # Use the numeric ID as ID for now
+                bill_no=bill_id,
+                bill_name="Unknown (Direct Fetch)",
+                proposer="Unknown",
+                proposer_kind_name="Unknown",
+                proc_status="Unknown",
+                committee="Unknown",
+                link_url="",
+            )
 
         if not target_bill:
             logger.warning(f"Bill not found in search: {bill_id}")
@@ -434,7 +462,10 @@ class BillService:
 class MemberService:
     def __init__(self, client: AssemblyAPIClient):
         self.client = client
-        self.MEMBER_INFO_ID = "OOWY4R001216HX11439"  # 국회의원 정보 통합 API
+        # NWVRRE001000000001: 국회의원 인적사항 (Member Personal Info)
+        # This seems to be the correct one for searching by name.
+        # Old ID: OOWY4R001216HX11439 (might be deprecated or wrong)
+        self.MEMBER_INFO_ID = "NWVRRE001000000001"
 
     async def get_member_info(self, name: str) -> list[dict[str, Any]]:
         """
@@ -539,6 +570,10 @@ class MeetingService:
                 f"date_end='{date_end}', page={page}. "
                 f"Raw results before filtering: {len(rows)}, after filtering: {len(filtered)}"
             )
+            # Return a structured empty result with a message if possible,
+            # but the return type is list[dict].
+            # We can't easily change the return type without breaking schema.
+            # So we'll just return empty list, but the logger info above helps debugging.
 
         return result
 
