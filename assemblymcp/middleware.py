@@ -53,14 +53,14 @@ class LoggingMiddleware(Middleware):
         call_next: Callable[[MiddlewareContext[mt.CallToolRequest]], Awaitable[mt.CallToolResult]],
     ) -> mt.CallToolResult:
         start_time = time.time()
-        tool_name = context.request.params.name
+        tool_name = context.message.params.name
         
         # Log start (only if debug or json to avoid noise in simple mode)
         if settings.log_json or settings.log_level == "DEBUG":
             logger.info(f"Tool call started: {tool_name}", extra={"props": {
                 "event": "tool_call_start",
                 "tool": tool_name,
-                "arguments": context.request.params.arguments
+                "arguments": context.message.params.arguments
             }})
 
         try:
@@ -109,12 +109,12 @@ class CachingMiddleware(Middleware):
         if not settings.enable_caching:
             return await call_next(context)
 
-        tool_name = context.request.params.name
+        tool_name = context.message.params.name
         
         if not self._is_cacheable(tool_name):
             return await call_next(context)
 
-        key = self._get_cache_key(tool_name, context.request.params.arguments)
+        key = self._get_cache_key(tool_name, context.message.params.arguments)
         
         # Check cache
         if key in self.cache:
