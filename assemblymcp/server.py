@@ -40,8 +40,8 @@ logger = logging.getLogger(__name__)
 # CORS is automatically handled by FastMCP for Streamable HTTP
 mcp = FastMCP("AssemblyMCP")
 
-# Add Middleware (Order matters: Outer -> Inner)
-# We want Caching to be checked first (Outer), then Logging (Inner) wraps the execution
+    # Add Middleware (Order matters: last added is outermost)
+    # Logging (outer) wraps Caching (inner) to time the whole process, including cache lookups.
 mcp.add_middleware(CachingMiddleware())
 mcp.add_middleware(LoggingMiddleware())
 

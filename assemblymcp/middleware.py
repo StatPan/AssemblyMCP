@@ -4,6 +4,7 @@ import json
 import logging
 from typing import Callable, Awaitable
 from datetime import datetime, timezone
+from collections import OrderedDict
 
 from fastmcp.server.middleware import Middleware, MiddlewareContext
 import mcp.types as mt
@@ -89,8 +90,7 @@ class LoggingMiddleware(Middleware):
 
 class CachingMiddleware(Middleware):
     def __init__(self):
-        self.cache = {}
-        self.access_order = [] # Simple LRU
+        self.cache = OrderedDict()
         self.ttl = settings.cache_ttl_seconds
         self.max_size = settings.cache_max_size
 
@@ -122,41 +122,32 @@ class CachingMiddleware(Middleware):
             if time.time() < entry["expires_at"]:
                 # Mark result as cached for logging
                 result = entry["result"]
-                # We can't easily attach attributes to Pydantic models without cloning
-                # But FastMCP results are Pydantic models.
-                # Let's just return it. The logging middleware might not see "cached" flag unless we hack it.
-                # Hack: Attach a private attribute to the object instance if possible, or just log here.
-                # Since we want centralized logging, let's try to set a flag on the object if it's mutable.
+                # Move to end (most recently used)
+                self.cache.move_to_end(key)
+                
                 try:
                     setattr(result, "_is_cached", True)
-                except:
+                except (AttributeError, TypeError):
+                    # Ignore if result object is immutable
                     pass
-                
-                # Update LRU
-                if key in self.access_order:
-                    self.access_order.remove(key)
-                    self.access_order.append(key)
                 
                 return result
             else:
+                # Expired
                 del self.cache[key]
-                if key in self.access_order:
-                    self.access_order.remove(key)
 
         # Cache miss
         result = await call_next(context)
         
         is_error = result.isError if hasattr(result, "isError") else False
         if not is_error:
+            # Evict if full
             if len(self.cache) >= self.max_size:
-                oldest = self.access_order.pop(0)
-                if oldest in self.cache:
-                    del self.cache[oldest]
+                self.cache.popitem(last=False) # Remove first (least recently used)
             
             self.cache[key] = {
                 "result": result,
                 "expires_at": time.time() + self.ttl
             }
-            self.access_order.append(key)
             
         return result
