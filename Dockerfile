@@ -40,13 +40,13 @@ RUN uv sync --frozen --no-dev
 # Create directory for logs with correct permissions
 RUN mkdir -p /tmp/assemblymcp && chmod 755 /tmp/assemblymcp
 
-# Expose port (FastMCP default is 8000)
-EXPOSE 8000
+# Expose port (Cloud Run default is 8080)
+EXPOSE 8080
 
 # Set transport to Streamable HTTP (the new MCP standard)
 ENV MCP_TRANSPORT=http
 ENV MCP_HOST=0.0.0.0
-ENV MCP_PORT=8000
+ENV MCP_PORT=8080
 ENV MCP_PATH=/mcp
 
 # Run the application
