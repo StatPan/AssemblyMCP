@@ -124,6 +124,58 @@ uv run ruff format .
 uv run pytest
 ```
 
+## Configuration & Hosting
+
+AssemblyMCP adopts a **"Battery-Included"** architecture, allowing you to control operational features like logging and caching via environment variables without modifying the code.
+
+### Environment Variables
+
+| Variable | Description | Default | Example |
+| :--- | :--- | :--- | :--- |
+| `ASSEMBLY_API_KEY` | **[Required]** API Key | - | `1234abcd...` |
+| `ASSEMBLY_LOG_LEVEL` | Logging Level | `INFO` | `DEBUG` |
+| `ASSEMBLY_LOG_JSON` | Enable JSON Logging (for Cloud Run) | `False` | `True` |
+| `ASSEMBLY_ENABLE_CACHING` | Enable In-Memory Caching | `False` | `True` |
+| `ASSEMBLY_CACHE_TTL_SECONDS` | Cache TTL (seconds) | `300` (5 min) | `600` |
+| `ASSEMBLY_CACHE_MAX_SIZE` | Max Cache Items | `100` | `500` |
+
+### Production Mode
+
+For serverless environments like Cloud Run or AWS Lambda, we recommend the following settings:
+
+```bash
+# Enable JSON logging for structured logs
+export ASSEMBLY_LOG_JSON=true
+
+# Enable caching to reduce API calls and improve speed
+export ASSEMBLY_ENABLE_CACHING=true
+```
+
+## Deployment
+
+This server can be easily deployed to cloud platforms like Google Cloud Run, Railway, and Fly.io using Docker.
+
+### Docker Deployment
+
+1. A **Dockerfile** is included, so you can build immediately.
+2. Set the required environment variables (e.g., `ASSEMBLY_API_KEY`) during deployment.
+3. The server runs in `Streamable HTTP` mode on port `8000` by default.
+
+### Google Cloud Run Example
+
+```bash
+gcloud run deploy assembly-mcp \
+  --source . \
+  --region asia-northeast3 \
+  --allow-unauthenticated \
+  --set-env-vars ASSEMBLY_API_KEY="your_key",ASSEMBLY_LOG_JSON="true",ASSEMBLY_ENABLE_CACHING="true"
+```
+
+### Key Changes
+
+- **Streamable HTTP Transport**: Uses the latest MCP standard.
+- **Endpoint**: The MCP server runs at `/mcp`.
+
 ## License
 
 MIT

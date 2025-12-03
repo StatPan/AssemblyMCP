@@ -7,7 +7,7 @@ from assembly_client.api import AssemblyAPIClient
 from assembly_client.errors import AssemblyAPIError, SpecParseError
 
 from assemblymcp.models import Bill, BillDetail, Committee
-from assemblymcp.settings import settings
+from assemblymcp.config import settings
 
 logger = logging.getLogger(__name__)
 

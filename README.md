@@ -132,26 +132,55 @@ MIT
 
 ---
 
+## 설정 및 호스팅 (Configuration & Hosting)
+
+AssemblyMCP는 **"Battery-Included"** 아키텍처를 채택하여, 별도의 코드 수정 없이 환경변수만으로 로깅, 캐싱 등 운영 기능을 제어할 수 있습니다.
+
+### 환경 변수 설정 (Environment Variables)
+
+| 변수명 | 설명 | 기본값 | 예시 |
+| :--- | :--- | :--- | :--- |
+| `ASSEMBLY_API_KEY` | **[필수]** 국회 OpenAPI 인증키 | - | `1234abcd...` |
+| `ASSEMBLY_LOG_LEVEL` | 로깅 레벨 (DEBUG, INFO, WARNING, ERROR) | `INFO` | `DEBUG` |
+| `ASSEMBLY_LOG_JSON` | JSON 구조화 로깅 활성화 (Cloud Run 등 운영 환경용) | `False` | `True` |
+| `ASSEMBLY_ENABLE_CACHING` | 인메모리 캐싱 활성화 (조회 성능 향상) | `False` | `True` |
+| `ASSEMBLY_CACHE_TTL_SECONDS` | 캐시 유지 시간 (초) | `300` (5분) | `600` |
+| `ASSEMBLY_CACHE_MAX_SIZE` | 최대 캐시 항목 수 | `100` | `500` |
+
+### 운영 모드 (Production Mode)
+
+Cloud Run, AWS Lambda 등 서버리스 환경이나 프로덕션 배포 시에는 다음 설정을 권장합니다.
+
+```bash
+# JSON 로깅 활성화 (로그 수집기 파싱 용이)
+export ASSEMBLY_LOG_JSON=true
+
+# 캐싱 활성화 (API 호출 비용 절감 및 속도 향상)
+export ASSEMBLY_ENABLE_CACHING=true
+```
+
 ## 배포 (Deployment)
 
-이 서버는 Docker를 사용하여 Railway, Render, Fly.io 등 클라우드 플랫폼에 쉽게 배포할 수 있습니다.
+이 서버는 Docker를 사용하여 Google Cloud Run, Railway, Fly.io 등 클라우드 플랫폼에 쉽게 배포할 수 있습니다.
 
 ### Docker 배포
 
 1. **Dockerfile**이 포함되어 있어 별도 설정 없이 바로 빌드할 수 있습니다.
-2. 배포 시 환경 변수 `ASSEMBLY_API_KEY`를 반드시 설정해야 합니다.
-3. 서버는 기본적으로 `SSE` 모드(`MCP_TRANSPORT=sse`)로 실행되며 `8000` 포트를 사용합니다.
+2. 배포 시 `ASSEMBLY_API_KEY` 등 필요한 환경 변수를 설정하세요.
+3. 서버는 기본적으로 `Streamable HTTP` 모드로 실행되며 `8000` 포트를 사용합니다.
 
-### Railway 배포 예시
+### Google Cloud Run 배포 예시
 
-1. GitHub 리포지토리를 Railway에 연결합니다.
-2. Variables 설정에서 `ASSEMBLY_API_KEY`를 추가합니다.
-3. 자동으로 Dockerfile을 감지하여 빌드 및 배포됩니다.
-4. 생성된 URL (예: `https://assembly-mcp.up.railway.app`) 뒤에 `/mcp`를 붙여 MCP 클라이언트에 등록합니다.
-   - MCP Server URL: `https://assembly-mcp.up.railway.app/mcp`
+```bash
+gcloud run deploy assembly-mcp \
+  --source . \
+  --region asia-northeast3 \
+  --allow-unauthenticated \
+  --set-env-vars ASSEMBLY_API_KEY="your_key",ASSEMBLY_LOG_JSON="true",ASSEMBLY_ENABLE_CACHING="true"
+```
 
 ### 주요 변경사항
 
-- **Streamable HTTP Transport**: MCP 프로토콜의 최신 표준인 Streamable HTTP를 사용합니다 (SSE는 deprecated).
+- **Streamable HTTP Transport**: MCP 프로토콜의 최신 표준인 Streamable HTTP를 사용합니다.
 - **엔드포인트**: `/mcp` 경로에서 MCP 서버가 실행됩니다.
-- **환경 변수**: `MCP_TRANSPORT=http`, `MCP_PATH=/mcp`로 설정됩니다.
+

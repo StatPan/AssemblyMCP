@@ -29,24 +29,21 @@ from assemblymcp.services import (
     MeetingService,
     MemberService,
 )
-from assemblymcp.settings import settings
+from assemblymcp.config import settings
+from assemblymcp.middleware import CachingMiddleware, LoggingMiddleware, configure_logging
 
-log_dir = Path(tempfile.gettempdir()) / "assemblymcp"
-log_dir.mkdir(exist_ok=True)
-log_file = log_dir / "server.log"
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    filename=str(log_file),
-    filemode="a",
-)
-
+# Configure logging based on settings
+configure_logging()
 logger = logging.getLogger(__name__)
 
 # Initialize FastMCP server
 # CORS is automatically handled by FastMCP for Streamable HTTP
 mcp = FastMCP("AssemblyMCP")
+
+# Add Middleware (Order matters: Outer -> Inner)
+# We want Caching to be checked first (Outer), then Logging (Inner) wraps the execution
+mcp.add_middleware(CachingMiddleware())
+mcp.add_middleware(LoggingMiddleware())
 
 # Initialize API Client globally to load specs once
 try:
