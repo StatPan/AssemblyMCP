@@ -44,7 +44,7 @@ jobs:
       - name: Compute image repo
         id: image
         run: |
-          echo "repo=ghcr.io/dlfrnaos19/assemblymcp" >> $GITHUB_OUTPUT
+          echo "repo=ghcr.io/statpan/assemblymcp" >> $GITHUB_OUTPUT
 
       - name: SHA tag
         id: sha_tag
