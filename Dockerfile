@@ -1,54 +1,53 @@
-# Use an official Python runtime as a parent image
-FROM python:3.12-slim
+## syntax=docker/dockerfile:1
+# Build stage: create a locked virtualenv with uv (keeps git out of runtime)
+FROM python:3.12-slim AS builder
 
-# Set environment variables
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PIP_NO_CACHE_DIR=off \
-    PIP_DISABLE_PIP_VERSION_CHECK=on \
-    PIP_DEFAULT_TIMEOUT=100
+    UV_PROJECT_ENV=/opt/venv
 
-# Install system dependencies
-# git is required for installing dependencies from git
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    git \
+# git is only needed to pull the assembly-api-client dependency
+RUN apt-get update && apt-get install -y --no-install-recommends git \
     && rm -rf /var/lib/apt/lists/*
 
-# Create a non-root user and group
-RUN groupadd --gid 1000 appuser && \
-    useradd --uid 1000 --gid 1000 --create-home appuser
-
-# Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 
-# Set working directory
+WORKDIR /app
+COPY pyproject.toml uv.lock README.md ./
+COPY assemblymcp ./assemblymcp
+
+# Create the virtualenv and install production deps (including our package)
+# uv writes to .venv by default; move it to a fixed path for the runtime image.
+RUN uv sync --frozen --no-dev \
+    && mv .venv /opt/venv \
+    && rm -rf /root/.cache
+
+# Runtime stage: minimal image with prebuilt venv and non-root user
+FROM python:3.12-slim AS runtime
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    UV_PROJECT_ENV=/opt/venv \
+    PATH="/opt/venv/bin:${PATH}" \
+    MCP_TRANSPORT=http \
+    MCP_HOST=0.0.0.0 \
+    MCP_PORT=8080 \
+    MCP_PATH=/mcp
+
+RUN groupadd --gid 1000 appuser \
+    && useradd --uid 1000 --gid 1000 --create-home appuser
+
 WORKDIR /home/appuser/app
-RUN mkdir -p /home/appuser/app && chown appuser:appuser /home/appuser/app
 
-# Copy configuration files and set ownership
-COPY --chown=appuser:appuser pyproject.toml uv.lock ./
-COPY --chown=appuser:appuser README.md ./
-COPY --chown=appuser:appuser assemblymcp ./assemblymcp
+# Copy only what is needed to run
+COPY --from=builder /opt/venv /opt/venv
+COPY --from=builder /app/assemblymcp ./assemblymcp
+COPY --from=builder /app/README.md ./README.md
 
-# Switch to non-root user
 USER appuser
-
-# Install dependencies
-# We use --frozen to ensure we use the lockfile
-RUN uv sync --frozen --no-dev
-
-# Create directory for logs with correct permissions
-RUN mkdir -p /tmp/assemblymcp && chmod 755 /tmp/assemblymcp
 
 # Expose port (Cloud Run default is 8080)
 EXPOSE 8080
 
-# Set transport to Streamable HTTP (the new MCP standard)
-ENV MCP_TRANSPORT=http
-ENV MCP_HOST=0.0.0.0
-ENV MCP_PORT=8080
-ENV MCP_PATH=/mcp
-
-# Run the application
-# We use 'uv run' to ensure we use the correct environment
-CMD ["uv", "run", "assemblymcp"]
+# Directly run the installed console script (uv not needed at runtime)
+CMD ["assemblymcp"]
