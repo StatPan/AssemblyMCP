@@ -29,24 +29,21 @@ from assemblymcp.services import (
     MeetingService,
     MemberService,
 )
-from assemblymcp.settings import settings
+from assemblymcp.config import settings
+from assemblymcp.middleware import CachingMiddleware, LoggingMiddleware, configure_logging
 
-log_dir = Path(tempfile.gettempdir()) / "assemblymcp"
-log_dir.mkdir(exist_ok=True)
-log_file = log_dir / "server.log"
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    filename=str(log_file),
-    filemode="a",
-)
-
+# Configure logging based on settings
+configure_logging()
 logger = logging.getLogger(__name__)
 
 # Initialize FastMCP server
 # CORS is automatically handled by FastMCP for Streamable HTTP
 mcp = FastMCP("AssemblyMCP")
+
+    # Add Middleware (Order matters: last added is outermost)
+    # Logging (outer) wraps Caching (inner) to time the whole process, including cache lookups.
+mcp.add_middleware(CachingMiddleware())
+mcp.add_middleware(LoggingMiddleware())
 
 # Initialize API Client globally to load specs once
 try:
@@ -497,7 +494,9 @@ def main():
     if transport in ("http", "streamable-http", "sse"):
         # Use Streamable HTTP (the new standard, replacing SSE)
         host = os.getenv("MCP_HOST", "0.0.0.0")
-        port = int(os.getenv("MCP_PORT", "8000"))
+        # Cloud Run provides PORT, default to 8000 if neither is set
+        default_port = os.getenv("PORT", "8000")
+        port = int(os.getenv("MCP_PORT", default_port))
         path = os.getenv("MCP_PATH", "/mcp")
 
         logger.info(f"Starting AssemblyMCP with Streamable HTTP on {host}:{port}{path}")
