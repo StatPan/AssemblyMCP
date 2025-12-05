@@ -1,6 +1,10 @@
 name: Build and Deploy
 
 on:
+
+permissions:
+  contents: read
+  packages: write
   push:
     branches: [main, master]
     tags:
