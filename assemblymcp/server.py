@@ -13,14 +13,14 @@ from typing import Any, TypeVar
 os.environ.setdefault("FASTMCP_LOG_ENABLED", "false")
 
 # Configure logging to file to avoid polluting stdout/stderr (breaks MCP protocol)
-import tempfile
-from pathlib import Path
 
 from assembly_client.api import AssemblyAPIClient
 from assembly_client.errors import AssemblyAPIError, SpecParseError
 from fastmcp import FastMCP
 
+from assemblymcp.config import settings
 from assemblymcp.initialization import ensure_master_list
+from assemblymcp.middleware import CachingMiddleware, LoggingMiddleware, configure_logging
 from assemblymcp.schemas import bill_detail_output_schema, bill_list_output_schema
 from assemblymcp.services import (
     BillService,
@@ -29,8 +29,6 @@ from assemblymcp.services import (
     MeetingService,
     MemberService,
 )
-from assemblymcp.config import settings
-from assemblymcp.middleware import CachingMiddleware, LoggingMiddleware, configure_logging
 
 # Configure logging based on settings
 configure_logging()
@@ -40,8 +38,8 @@ logger = logging.getLogger(__name__)
 # CORS is automatically handled by FastMCP for Streamable HTTP
 mcp = FastMCP("AssemblyMCP")
 
-    # Add Middleware (Order matters: last added is outermost)
-    # Logging (outer) wraps Caching (inner) to time the whole process, including cache lookups.
+# Add Middleware (Order matters: last added is outermost)
+# Logging (outer) wraps Caching (inner) to time the whole process, including cache lookups.
 mcp.add_middleware(CachingMiddleware())
 mcp.add_middleware(LoggingMiddleware())
 
