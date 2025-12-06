@@ -48,7 +48,7 @@ jobs:
       - name: Compute image repo
         id: image
         run: |
-          echo "repo=docker.io/statpan/assemblymcp" >> $GITHUB_OUTPUT
+          echo "repo=gcr.io/dlfrnaos19/assembly-mcp" >> $GITHUB_OUTPUT
 
       - name: SHA tag
         id: sha_tag
@@ -63,12 +63,16 @@ jobs:
             echo "publish_tag=${{ steps.sha_tag.outputs.sha_tag }}" >> $GITHUB_OUTPUT
           fi
 
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
         with:
-          registry: docker.io
-          username: statpan
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          credentials_json: '${{ secrets.GCP_CREDENTIALS_JSON }}'
+          
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        
+      - name: Configure Docker for GCR
+        run: gcloud auth configure-docker gcr.io
 
       - name: Extract metadata
         id: meta
