@@ -141,6 +141,12 @@ async def get_api_spec(service_id: str) -> dict[str, Any]:
     request parameters with types/constraints, and response structure.
     Useful for dynamic API exploration when high-level tools don't meet your needs.
 
+    Features:
+    - Returns full parameter restrictions.
+    - **Data Preview**: Fetches 1 real data row to show actual value formats.
+    - **Parameter Hints**: Cross-references real data to suggest valid inputs
+      (e.g., UNIT_CD="22대").
+
     Workflow:
     1. Use 'list_api_services(keyword)' to find service IDs
     2. Call this tool with the service_id to see parameter details
@@ -155,9 +161,12 @@ async def get_api_spec(service_id: str) -> dict[str, Any]:
     if not client:
         raise RuntimeError("API client not initialized")
 
+    result = {}
+
+    # 1. Parse Spec
     try:
         spec = await client.spec_parser.parse_spec(service_id)
-        return spec.to_dict()
+        result = spec.to_dict()
     except SpecParseError as e:
         logger.error(f"Failed to parse spec for {service_id}: {e}")
         return {
@@ -168,32 +177,43 @@ async def get_api_spec(service_id: str) -> dict[str, Any]:
                 "스펙 파일 다운로드 또는 파싱에 실패했습니다.\n"
                 "공공데이터 포털의 일시적 오류이거나 스펙 파일 형식이 변경되었을 수 있습니다."
             ),
-            "suggested_action": "Try again later or check data.go.kr",
         }
     except Exception as e:
         logger.error(f"Unexpected error getting spec for {service_id}: {e}", exc_info=True)
+        return {"error": str(e), "service_id": service_id}
 
-        # Provide detailed troubleshooting information
-        cache_dir = "unknown"
-        if hasattr(client.spec_parser, "cache_dir"):
-            cache_dir = str(client.spec_parser.cache_dir)
+    # 2. Fetch Data Preview (Non-blocking)
+    try:
+        service = _require_service(discovery_service)
+        sample = await service.get_preview_data(service_id)
 
-        error_response = {
-            "error": str(e),
-            "error_type": type(e).__name__,
-            "service_id": service_id,
-            "help": (
-                "예상치 못한 오류가 발생했습니다. 로그를 확인해주세요.\n\n"
-                "가능한 원인:\n"
-                "1. 네트워크 문제\n"
-                "2. 서비스 ID가 유효하지 않음\n"
-                "3. 파일 시스템 권한 문제"
-            ),
-            "spec_cache_location": cache_dir,
-            "suggested_action": "Try: list_api_services(keyword='') to see all available services",
-        }
+        if sample:
+            result["data_preview"] = {
+                "description": "Actual data fetched from API (limit=1) for format reference.",
+                "sample_row": sample,
+            }
 
-        return error_response
+            # 3. Generate Parameter Hints
+            # Cross-reference known request params with response keys
+            hints = {}
+            # Ensure 'request_parameter' exists and is a list
+            req_params = result.get("request_parameter", [])
+            if isinstance(req_params, list):
+                for param in req_params:
+                    # param is usually dict like {"name": "UNIT_CD", ...}
+                    p_name = param.get("name")
+                    if p_name and p_name in sample:
+                        hints[p_name] = f"Example from data: '{sample[p_name]}'"
+
+            if hints:
+                result["parameter_hints"] = hints
+
+    except Exception as e:
+        # Don't fail the whole tool if preview fails
+        logger.warning(f"Failed to add preview data for {service_id}: {e}")
+        result["data_preview_error"] = str(e)
+
+    return result
 
 
 @mcp.tool()
@@ -428,6 +448,27 @@ async def search_meetings(
         page=page,
         limit=limit,
     )
+
+
+@mcp.tool()
+async def get_plenary_schedule(
+    unit_cd: str | None = None,
+    page: int = 1,
+    limit: int = 10,
+) -> list[dict[str, Any]]:
+    """
+    본회의 일정을 조회합니다. (Service ID: ORDPSW001070QH19059)
+
+    - unit_cd(대수) 파라미터가 중요합니다. (예: "22")
+    - 데이터가 없는 경우도 많으니 빈 결과가 나오면 대수를 변경하거나 생략해보세요.
+
+    Args:
+        unit_cd: 대수 (예: "22"). 생략 시 전체 조회될 수 있음.
+        page: Page number (default 1).
+        limit: Max results (default 10).
+    """
+    service = _require_service(meeting_service)
+    return await service.get_plenary_schedule(unit_cd=unit_cd, page=page, limit=limit)
 
 
 @mcp.tool()
