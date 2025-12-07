@@ -180,7 +180,25 @@ async def get_api_spec(service_id: str) -> dict[str, Any]:
         }
     except Exception as e:
         logger.error(f"Unexpected error getting spec for {service_id}: {e}", exc_info=True)
-        return {"error": str(e), "service_id": service_id}
+
+        cache_dir = "unknown"
+        if hasattr(client.spec_parser, "cache_dir"):
+            cache_dir = str(client.spec_parser.cache_dir)
+
+        return {
+            "error": str(e),
+            "error_type": type(e).__name__,
+            "service_id": service_id,
+            "help": (
+                "예상치 못한 오류가 발생했습니다. 로그를 확인해주세요.\n\n"
+                "가능한 원인:\n"
+                "1. 네트워크 문제\n"
+                "2. 서비스 ID가 유효하지 않음\n"
+                "3. 파일 시스템 권한 문제"
+            ),
+            "spec_cache_location": cache_dir,
+            "suggested_action": "제안: list_api_services(keyword='')로 사용 가능한 서비스 확인",
+        }
 
     # 2. Fetch Data Preview (Non-blocking)
     try:
