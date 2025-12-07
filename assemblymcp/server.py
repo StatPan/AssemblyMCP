@@ -112,20 +112,21 @@ async def get_assembly_info() -> str:
         api_key_status = "configured" if settings.assembly_api_key else "not configured"
         service_count = len(client.service_map)
         return (
-            "AssemblyMCP – Korean National Assembly Open API\n"
-            f"API Key: {api_key_status}\n"
-            f"Available Services (raw): {service_count} (≈270 OpenAPI endpoints)\n\n"
-            "핵심 원칙: 고수준 툴에 없다고 끝내지 말 것. 항상 list_api_services → "
-            "get_api_spec → call_api_raw 조합으로 우회 가능합니다.\n\n"
+            "AssemblyMCP – 대한민국 국회 OpenAPI (Korean National Assembly Open API)\n"
+            f"API 키 상태: {api_key_status}\n"
+            f"사용 가능한 서비스(Raw): {service_count}개 (약 270개 엔드포인트)\n\n"
+            "핵심 원칙: 고수준 툴에 기능이 없다고 검색을 중단하지 마세요.\n"
+            "항상 다음 조합으로 해결 가능합니다.\n"
+            "👉 list_api_services → get_api_spec → call_api_raw\n\n"
             "빠른 워크플로우 예시:\n"
-            "1) 의안: search_bills/get_recent_bills → get_bill_details → "
+            "1) 의안 검색: search_bills/get_recent_bills → get_bill_details → "
             "get_meeting_records(토론) → get_member_info(발의자 상세)\n"
-            "2) 위원회 구성원: list_api_services('위원 명단') → get_api_spec → "
-            "call_api_raw → 필요 시 get_member_info로 개인 정보 보강\n"
-            "3) 기타 데이터: list_api_services(keyword)로 서비스 ID 확보 후 "
+            "2) 위원회 명단: list_api_services('위원 명단') → get_api_spec → "
+            "call_api_raw → 필요 시 get_member_info로 인적사항 보강\n"
+            "3) 기타 데이터: list_api_services(키워드)로 서비스 ID 확보 후 "
             "get_api_spec에서 필수 파라미터 확인 → call_api_raw로 직접 호출\n\n"
-            "항상: 특정 주제에 맞는 서비스가 안 보이면 키워드를 바꿔 여러 번 검색하고, "
-            "도구가 없다거나 불가능하다고 답하지 마세요."
+            "팁: 특정 주제에 맞는 서비스가 안 보이면 키워드를 바꿔 여러 번 검색하고, "
+            "도구가 모자라거나 불가능하다고 섣불리 결론 내리지 마세요."
         )
     except Exception as e:
         traceback.print_exc()
@@ -135,28 +136,27 @@ async def get_assembly_info() -> str:
 @mcp.tool()
 async def get_api_spec(service_id: str) -> dict[str, Any]:
     """
-    Get detailed specification for a specific API service.
+    특정 API 서비스의 상세 스펙을 조회합니다.
 
-    This returns the complete API specification including endpoint URL,
-    request parameters with types/constraints, and response structure.
-    Useful for dynamic API exploration when high-level tools don't meet your needs.
+    이 툴은 엔드포인트 URL, 요청 파라미터(타입/제약조건), 응답 구조 등 전체 API 명세를 반환합니다.
+    고수준 툴이 제공하지 않는 정보를 조회하기 위해 동적으로 API를 탐색할 때 유용합니다.
 
-    Features:
-    - Returns full parameter restrictions.
-    - **Data Preview**: Fetches 1 real data row to show actual value formats.
-    - **Parameter Hints**: Cross-references real data to suggest valid inputs
-      (e.g., UNIT_CD="22대").
+    기능:
+    - 파라미터 제약조건 전체 반환.
+    - **데이터 미리보기(Data Preview)**: 실제 데이터 1건을 조회하여 값의 형식을 보여줍니다.
+    - **파라미터 힌트(Parameter Hints)**: 실제 데이터를 기반으로 유효한 입력값을 제안합니다
+      (예: UNIT_CD="22대").
 
-    Workflow:
-    1. Use 'list_api_services(keyword)' to find service IDs
-    2. Call this tool with the service_id to see parameter details
-    3. Use 'call_api_raw(service_id, params)' to make custom API calls
+    워크플로우:
+    1. 'list_api_services(keyword)'로 서비스 ID 검색
+    2. 이 툴을 호출하여 파라미터 상세 확인
+    3. 'call_api_raw(service_id, params)'로 맞춤형 API 호출
 
     Args:
-        service_id: The service ID (e.g., 'O4K6HM0012064I15889')
+        service_id: 서비스 ID (예: 'O4K6HM0012064I15889')
 
     Returns:
-        Complete API specification including parameters and endpoint
+        파라미터와 엔드포인트를 포함한 전체 API 스펙
     """
     if not client:
         raise RuntimeError("API client not initialized")
@@ -282,21 +282,21 @@ async def get_bill_info(
     limit: int = 10,
 ) -> list[dict[str, Any]]:
     """
-    Advanced search for legislative bills with specific filters.
-    Use this when you need to filter by specific fields like ID, date, or status.
-    For general keyword search, use 'search_bills' instead.
+    다양한 필터를 사용하여 의안을 상세 검색합니다.
+    ID, 날짜, 상태 등 특정 필드로 검색할 때 사용하세요.
+    일반적인 키워드 검색은 'search_bills'를 사용하세요.
 
     Args:
-        age: 대 (AGE). Defaults to "22" (current session).
+        age: 대수 (예: "22"). 기본값은 "22" (현재 대수).
         bill_id: 의안ID (BILL_ID/BILL_NO).
         bill_name: 의안명 (BILL_NAME).
-        propose_dt: 제안일자 (PROPOSE_DT). YYYYMMDD format.
+        propose_dt: 제안일자 (PROPOSE_DT). YYYYMMDD 형식.
         proc_status: 처리상태 (PROC_STATUS).
-        page: Page number (default 1).
-        limit: Max results (default 10).
+        page: 페이지 번호 (기본값 1).
+        limit: 최대 결과 수 (기본값 10).
 
     Returns:
-        List of Bill objects.
+        의안 객체 목록.
     """
     service = _require_service(bill_service)
     bills = await service.get_bill_info(
@@ -314,21 +314,20 @@ async def get_bill_info(
 @mcp.tool(output_schema=bill_list_output_schema())
 async def search_bills(keyword: str, page: int = 1, limit: int = 10) -> list[dict[str, Any]]:
     """
-    Search for bills by keyword.
-    Automatically searches the current legislative session (22nd),
-    and falls back to the previous session (21st) if no results are found.
+    키워드로 의안을 검색합니다.
+    자동으로 현재 대수(22대)를 검색하고, 결과가 없으면 이전 대수(21대)를 검색합니다.
 
-    IMPORTANT: This tool returns a list of bills with basic info (ID, title, proposer).
-    To get the full text, summary, or proposal reason, you MUST take the 'bill_id'
-    from the result and call 'get_bill_details(bill_id)'.
+    중요: 이 툴은 의안의 기본 정보(ID, 제목, 발의자)만 반환합니다.
+    전문, 요약, 제안 이유 등 상세 내용은 'bill_id'를 사용하여 'get_bill_details(bill_id)'를
+    호출해야 합니다.
 
     Args:
-        keyword: Search term (e.g., "artificial intelligence", "budget").
-        page: Page number (default 1).
-        limit: Max results (default 10).
+        keyword: 검색어 (예: "인공지능", "예산").
+        page: 페이지 번호 (기본값 1).
+        limit: 최대 결과 수 (기본값 10).
 
     Returns:
-        List of matching bills.
+        검색된 의안 목록.
     """
     service = _require_service(bill_service)
     bills = await service.search_bills(keyword, page=page, limit=limit)
@@ -338,19 +337,18 @@ async def search_bills(keyword: str, page: int = 1, limit: int = 10) -> list[dic
 @mcp.tool(output_schema=bill_list_output_schema())
 async def get_recent_bills(page: int = 1, limit: int = 10) -> list[dict[str, Any]]:
     """
-    Get the most recently proposed bills.
-    Useful for answering "what's new" or "latest bills".
+    최근 발의된 의안 목록을 조회합니다.
+    '새로운 의안'이나 '최신 의안'을 파악할 때 유용합니다.
 
-    IMPORTANT: This tool returns a list of bills with basic info.
-    To get the full text, summary, or proposal reason, you MUST take the 'bill_id'
-    from the result and call 'get_bill_details(bill_id)'.
+    중요: 이 툴은 의안의 기본 정보만 반환합니다.
+    상세 내용은 'get_bill_details(bill_id)'를 사용하세요.
 
     Args:
-        page: Page number (default 1).
-        limit: Number of bills to return (default 10).
+        page: 페이지 번호 (기본값 1).
+        limit: 반환할 의안 수 (기본값 10).
 
     Returns:
-        List of bills sorted by proposal date (newest first).
+        발의일자 순으로 정렬된 의안 목록 (최신순).
     """
     service = _require_service(bill_service)
     bills = await service.get_recent_bills(page=page, limit=limit)
@@ -360,20 +358,20 @@ async def get_recent_bills(page: int = 1, limit: int = 10) -> list[dict[str, Any
 @mcp.tool(output_schema=bill_detail_output_schema())
 async def get_bill_details(bill_id: str, age: str | None = None) -> dict[str, Any] | None:
     """
-    Get detailed information about a specific bill.
-    Includes the bill's summary (main content) and reason for proposal.
+    특정 의안의 상세 정보를 조회합니다.
+    의안의 요약(주요 내용)과 제안 이유를 포함합니다.
 
-    Usage:
-    1. Search for bills using 'search_bills' or 'get_recent_bills'.
-    2. Copy the 'bill_id' from the result.
-    3. Call this tool with that 'bill_id'.
+    사용법:
+    1. 'search_bills' 또는 'get_recent_bills'로 의안 검색
+    2. 결과에서 'bill_id' 복사
+    3. 이 툴에 'bill_id'를 전달하여 호출
 
     Args:
-        bill_id: The ID of the bill (e.g., '2100001').
-        age: Optional legislative session age (e.g., "22"). If provided, skips probing.
+        bill_id: 의안 ID (예: '2100001').
+        age: 선택적 대수 (예: "22"). 제공 시 탐색 과정을 건너뜁니다.
 
     Returns:
-        BillDetail object containing summary and reason, or None if not found.
+        요약과 제안 이유가 포함된 BillDetail 객체, 또는 없으면 None.
     """
     service = _require_service(bill_service)
     details = await service.get_bill_details(bill_id, age=age)
@@ -383,14 +381,14 @@ async def get_bill_details(bill_id: str, age: str | None = None) -> dict[str, An
 @mcp.tool()
 async def get_member_info(name: str) -> list[dict]:
     """
-    Search for detailed information about a National Assembly member.
-    Useful for finding out who a proposer is, their party, and their constituency.
+    국회의원 상세 정보를 검색합니다.
+    발의자가 누구인지, 소속 정당, 지역구 등을 파악할 때 유용합니다.
 
     Args:
-        name: Name of the member (e.g., "홍길동").
+        name: 의원명 (예: "홍길동").
 
     Returns:
-        List of member information dictionaries.
+        국회의원 정보 목록.
     """
     service = _require_service(member_service)
     return await service.get_member_info(name)
@@ -399,14 +397,14 @@ async def get_member_info(name: str) -> list[dict]:
 @mcp.tool()
 async def get_meeting_records(bill_id: str) -> list[dict]:
     """
-    Get committee meeting records related to a specific bill.
-    Useful for understanding the discussion and legislative history of a bill.
+    특정 의안과 관련된 위원회 회의록을 조회합니다.
+    의안에 대한 논의 내용과 입법 연혁을 파악할 때 유용합니다.
 
     Args:
-        bill_id: The ID of the bill (e.g., '2100001').
+        bill_id: 의안 ID (예: '2100001').
 
     Returns:
-        List of meeting records.
+        회의록 목록.
     """
     service = _require_service(meeting_service)
     return await service.get_meeting_records(bill_id)
@@ -421,24 +419,24 @@ async def search_meetings(
     limit: int = 10,
 ) -> list[dict[str, Any]]:
     """
-    Search for committee meetings.
+    위원회 회의를 검색합니다.
 
-    Note: This API often returns empty results due to strict filtering or limited data availability.
-    For better results:
-    - Use recent dates (within last 6 months)
-    - Try without date filters first to see available data
-    - Use get_committee_list() to get exact committee names
-    - Be aware that meeting data may not be immediately available after meetings
+    참고: 엄격한 필터링이나 데이터 부족으로 인해 빈 결과가 자주 나올 수 있습니다.
+    더 나은 결과를 위해:
+    - 최근 날짜 사용 (지난 6개월 이내)
+    - 날짜 필터 없이 조회하여 가용 데이터 확인
+    - get_committee_list()로 정확한 위원회 명칭 확인
+    - 회의 직후에는 데이터가 바로 제공되지 않을 수 있음을 인지
 
     Args:
-        committee_name: Name of the committee (e.g., "법제사법위원회").
-        date_start: Start date (YYYY-MM-DD).
-        date_end: End date (YYYY-MM-DD).
-        page: Page number (default 1).
-        limit: Max results (default 10).
+        committee_name: 위원회명 (예: "법제사법위원회").
+        date_start: 시작일 (YYYY-MM-DD).
+        date_end: 종료일 (YYYY-MM-DD).
+        page: 페이지 번호 (기본값 1).
+        limit: 최대 결과 수 (기본값 10).
 
     Returns:
-        List of meeting records.
+        회의록 목록.
     """
     service = _require_service(meeting_service)
     return await service.search_meetings(
