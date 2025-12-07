@@ -50,4 +50,4 @@ USER appuser
 EXPOSE 8080
 
 # Directly run the installed console script (uv not needed at runtime)
-CMD ["assemblymcp"]
+CMD ["python", "-m", "assemblymcp.server"]
