@@ -85,7 +85,7 @@ class DiscoveryService:
                 params_list = list(params.keys()) if params else []
                 enhanced_msg = (
                     f"API 호출 실패 - 필수 파라미터 누락: {error_msg}\n\n"
-                    f"📋 도움말:\n"
+                    f"도움말:\n"
                     f"1. get_api_spec('{service_id_or_name}')를 호출하여 필수 파라미터 확인\n"
                     f"   (주의: 스펙 다운로드가 실패할 경우 공공데이터포털 확인 필요)\n"
                     f"2. 공공데이터포털(data.go.kr)에서 "
@@ -98,6 +98,26 @@ class DiscoveryService:
 
             # Re-raise other API errors as-is
             raise
+
+    async def get_preview_data(self, service_id: str) -> dict[str, Any] | None:
+        """
+        Fetch a single row of data for preview purposes.
+        Used to provide parameter hints in get_api_spec.
+        """
+        try:
+            # Try to get just 1 row
+            params = {"pIndex": 1, "pSize": 1}
+            # Use configured default age if needed, though most APIs might ignore it
+            # or it might be required. Safest to include if it's a common required param.
+            # But for raw calls we generally want to be minimal.
+            # Let's try minimal first.
+
+            raw_data = await self.call_raw(service_id, params=params)
+            rows = _collect_rows(raw_data)
+            return rows[0] if rows else None
+        except Exception as e:
+            logger.warning(f"Preview fetch failed for {service_id}: {e}")
+            return None
 
 
 class BillService:
@@ -464,8 +484,8 @@ class MemberService:
         self.client = client
         # NWVRRE001000000001: 국회의원 인적사항 (Member Personal Info)
         # This seems to be the correct one for searching by name.
-        # Old ID: OOWY4R001216HX11439 (might be deprecated or wrong)
-        self.MEMBER_INFO_ID = "NWVRRE001000000001"
+        # Updated to new service ID "OWSSC6001134T516707" as per issue report (backdoor solution)
+        self.MEMBER_INFO_ID = "OWSSC6001134T516707"
 
     async def get_member_info(self, name: str) -> list[dict[str, Any]]:
         """
@@ -577,6 +597,28 @@ class MeetingService:
 
         return result
 
+    async def get_plenary_schedule(
+        self,
+        unit_cd: str | None = None,
+        page: int = 1,
+        limit: int = 10,
+    ) -> list[dict[str, Any]]:
+        """
+        Get plenary meeting schedule.
+        Service ID: ORDPSW001070QH19059 (본회의 일정)
+        """
+        service_id = "ORDPSW001070QH19059"
+        params = {"pIndex": page, "pSize": limit}
+
+        if unit_cd:
+            # The API expects just the number string, e.g. "22"
+            # If user provides "22대", we strip non-digits just in case.
+            clean_unit_cd = re.sub(r"[^0-9]", "", str(unit_cd))
+            params["UNIT_CD"] = clean_unit_cd
+
+        raw_data = await self.client.get_data(service_id_or_name=service_id, params=params)
+        return _collect_rows(raw_data)
+
 
 class CommitteeService:
     def __init__(self, client: AssemblyAPIClient):
@@ -653,6 +695,15 @@ class CommitteeService:
                 row_name = re.sub(r"\s+", "", str(row.get("COMMITTEE_NAME", "")))
                 if normalized in row_name:
                     filtered.append(row)
-            rows = filtered or rows
+
+            # CRITICAL FIX: If filtering yields results, use them.
+            # If filtering yields NOTHING, it means the name didn't match.
+            # Previously we fell back to 'rows', which returned the entire list (bad).
+            # If 'filtered' is empty, BUT 'rows' was not empty
+            # (meaning we had candidates but none matched), return empty.
+            if rows and not filtered:
+                return []
+            if filtered:
+                rows = filtered
 
         return rows[:limit]
