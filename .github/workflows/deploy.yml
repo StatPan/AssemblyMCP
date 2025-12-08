@@ -32,14 +32,7 @@ jobs:
       - name: Determine version from pyproject
         id: version
         run: |
-          VERSION=$(python - <<'PY'
-import tomllib
-from pathlib import Path
-
-data = tomllib.loads(Path("pyproject.toml").read_text())
-print(data["project"]["version"])
-PY
-)
+          VERSION=$(grep -E '^version *= *"' pyproject.toml | head -n1 | sed -E 's/version *= *"([^"]+)"/\1/')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Version: $VERSION"
 
