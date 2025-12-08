@@ -18,6 +18,13 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Read pyproject version
+        id: py_version
+        run: |
+          PY_VERSION=$(grep -E '^version *= *"' pyproject.toml | head -n1 | sed -E 's/version *= *"([^"]+)".*/\1/')
+          echo "py_version=$PY_VERSION" >> $GITHUB_OUTPUT
+          echo "pyproject version: $PY_VERSION"
+
       - name: Configure Git
         run: |
           git config user.name "github-actions[bot]"
@@ -26,19 +33,25 @@ jobs:
       - name: Get current version
         id: current_version
         run: |
-          # Get latest tag or default to 0.0.0
-          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-          echo "current_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
-          echo "Current version: $LATEST_TAG"
+          # Get latest tag; if none, fall back to pyproject version
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || true)
+          if [ -n "$LATEST_TAG" ]; then
+            CURRENT_TAG="$LATEST_TAG"
+          else
+            CURRENT_TAG="v${{ steps.py_version.outputs.py_version }}"
+          fi
+          echo "latest_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
+          echo "current_tag=$CURRENT_TAG" >> $GITHUB_OUTPUT
+          echo "Current version source (tag if exists, else pyproject): $CURRENT_TAG"
 
       - name: Determine version bump type
         id: bump_type
         run: |
           # Get commits since last tag
-          LATEST_TAG="${{ steps.current_version.outputs.current_tag }}"
+          LATEST_TAG="${{ steps.current_version.outputs.latest_tag }}"
 
           # Get commit messages
-          if [ "$LATEST_TAG" = "v0.0.0" ]; then
+          if [ -z "$LATEST_TAG" ]; then
             COMMITS=$(git log --pretty=format:"%s")
           else
             COMMITS=$(git log ${LATEST_TAG}..HEAD --pretty=format:"%s")
