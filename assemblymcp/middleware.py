@@ -51,14 +51,25 @@ def configure_logging():
     logger.setLevel(settings.log_level.upper())
 
 
+def _extract_tool_info(message: mt.CallToolRequest | mt.CallToolRequestParams) -> tuple[str, dict]:
+    """
+    Extract tool name and arguments from the message.
+    Handles both CallToolRequest (has .params) and CallToolRequestParams (is params).
+    """
+    if hasattr(message, "params"):
+        return message.params.name, message.params.arguments
+    return message.name, message.arguments
+
+
 class LoggingMiddleware(Middleware):
     async def on_call_tool(
         self,
         context: MiddlewareContext[mt.CallToolRequest],
         call_next: Callable[[MiddlewareContext[mt.CallToolRequest]], Awaitable[mt.CallToolResult]],
     ) -> mt.CallToolResult:
+        tool_name, arguments = _extract_tool_info(context.message)
+
         start_time = time.time()
-        tool_name = context.message.params.name
 
         # Log start (only if debug or json to avoid noise in simple mode)
         if settings.log_json or settings.log_level == "DEBUG":
@@ -68,7 +79,7 @@ class LoggingMiddleware(Middleware):
                     "props": {
                         "event": "tool_call_start",
                         "tool": tool_name,
-                        "arguments": context.message.params.arguments,
+                        "arguments": arguments,
                     }
                 },
             )
@@ -130,12 +141,12 @@ class CachingMiddleware(Middleware):
         if not settings.enable_caching:
             return await call_next(context)
 
-        tool_name = context.message.params.name
+        tool_name, arguments = _extract_tool_info(context.message)
 
         if not self._is_cacheable(tool_name):
             return await call_next(context)
 
-        key = self._get_cache_key(tool_name, context.message.params.arguments)
+        key = self._get_cache_key(tool_name, arguments)
 
         # Check cache
         if key in self.cache:

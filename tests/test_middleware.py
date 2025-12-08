@@ -88,3 +88,41 @@ async def test_caching_middleware_non_cacheable():
     await middleware.on_call_tool(context, mock_next)
 
     assert mock_next.call_count == 2  # Should be called twice
+
+
+@pytest.mark.asyncio
+async def test_logging_middleware_handles_params_as_message(caplog):
+    """Test LoggingMiddleware when context.message IS CallToolRequestParams."""
+    middleware = LoggingMiddleware()
+
+    # Create context with CallToolRequestParams as message (simulating the bug condition)
+    params = mt.CallToolRequestParams(name="test_tool", arguments={"arg": "value"})
+    context = MiddlewareContext(message=params, fastmcp_context=AsyncMock())
+
+    async def call_next(ctx):
+        return create_mock_result()
+
+    settings.log_json = True
+    settings.log_level = "INFO"
+
+    with caplog.at_level(logging.INFO):
+        await middleware.on_call_tool(context, call_next)
+
+    assert "Tool call started: test_tool" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_caching_middleware_handles_params_as_message():
+    """Test CachingMiddleware when context.message IS CallToolRequestParams."""
+    middleware = CachingMiddleware()
+    settings.enable_caching = True
+
+    params = mt.CallToolRequestParams(name="get_test", arguments={"arg": "value"})
+    context = MiddlewareContext(message=params, fastmcp_context=AsyncMock())
+
+    mock_next = AsyncMock(return_value=create_mock_result("result"))
+
+    # This should NOT raise AttributeError
+    await middleware.on_call_tool(context, mock_next)
+
+    assert mock_next.called

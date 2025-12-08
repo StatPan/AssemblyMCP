@@ -99,4 +99,4 @@ async def test_get_bill_details_numeric_id_bypass(mock_client):
 async def test_member_service_id_is_correct(mock_client):
     """Test that MemberService uses the correct Service ID."""
     member_service = MemberService(mock_client)
-    assert member_service.MEMBER_INFO_ID == "NWVRRE001000000001"
+    assert member_service.MEMBER_INFO_ID == "OWSSC6001134T516707"
