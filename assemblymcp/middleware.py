@@ -51,19 +51,23 @@ def configure_logging():
     logger.setLevel(settings.log_level.upper())
 
 
+def _extract_tool_info(message: mt.CallToolRequest | mt.CallToolRequestParams) -> tuple[str, dict]:
+    """
+    Extract tool name and arguments from the message.
+    Handles both CallToolRequest (has .params) and CallToolRequestParams (is params).
+    """
+    if hasattr(message, "params"):
+        return message.params.name, message.params.arguments
+    return message.name, message.arguments
+
+
 class LoggingMiddleware(Middleware):
     async def on_call_tool(
         self,
         context: MiddlewareContext[mt.CallToolRequest],
         call_next: Callable[[MiddlewareContext[mt.CallToolRequest]], Awaitable[mt.CallToolResult]],
     ) -> mt.CallToolResult:
-        # Handle case where context.message might be CallToolRequestParams directly
-        if hasattr(context.message, "params"):
-            tool_name = context.message.params.name
-            arguments = context.message.params.arguments
-        else:
-            tool_name = context.message.name
-            arguments = context.message.arguments
+        tool_name, arguments = _extract_tool_info(context.message)
 
         start_time = time.time()
 
@@ -137,13 +141,7 @@ class CachingMiddleware(Middleware):
         if not settings.enable_caching:
             return await call_next(context)
 
-        # Handle case where context.message might be CallToolRequestParams directly
-        if hasattr(context.message, "params"):
-            tool_name = context.message.params.name
-            arguments = context.message.params.arguments
-        else:
-            tool_name = context.message.name
-            arguments = context.message.arguments
+        tool_name, arguments = _extract_tool_info(context.message)
 
         if not self._is_cacheable(tool_name):
             return await call_next(context)
