@@ -19,8 +19,12 @@ from assembly_client.errors import AssemblyAPIError, SpecParseError
 from fastmcp import FastMCP
 
 from assemblymcp.config import settings
-from assemblymcp.initialization import ensure_master_list
-from assemblymcp.middleware import CachingMiddleware, LoggingMiddleware, configure_logging
+from assemblymcp.middleware import (
+    CachingMiddleware,
+    InitializationMiddleware,
+    LoggingMiddleware,
+    configure_logging,
+)
 from assemblymcp.schemas import bill_detail_output_schema, bill_list_output_schema
 from assemblymcp.services import (
     BillService,
@@ -34,15 +38,6 @@ from assemblymcp.services import (
 configure_logging()
 logger = logging.getLogger(__name__)
 
-# Initialize FastMCP server
-# CORS is automatically handled by FastMCP for Streamable HTTP
-mcp = FastMCP("AssemblyMCP")
-
-# Add Middleware (Order matters: last added is outermost)
-# Logging (outer) wraps Caching (inner) to time the whole process, including cache lookups.
-mcp.add_middleware(CachingMiddleware())
-mcp.add_middleware(LoggingMiddleware())
-
 # Initialize API Client globally to load specs once
 try:
     client = AssemblyAPIClient(api_key=settings.assembly_api_key)
@@ -50,15 +45,19 @@ except Exception as e:
     logger.error(f"Failed to initialize client: {e}")
     client = None
 
+# Initialize FastMCP server
+# CORS is automatically handled by FastMCP for Streamable HTTP
+mcp = FastMCP("AssemblyMCP")
+
+# Add Middleware (Order matters: last added is outermost)
+# Logging (outer) wraps Init (middle) wraps Caching (inner)
+mcp.add_middleware(CachingMiddleware())
+mcp.add_middleware(InitializationMiddleware(client))
+mcp.add_middleware(LoggingMiddleware())
+
 
 # Initialize Services
 if client:
-    try:
-        asyncio.run(ensure_master_list(client))
-    except Exception as e:
-        logger.critical(f"Failed to initialize master list: {e}")
-        raise RuntimeError("Could not initialize master API list. Server cannot start.") from e
-
     discovery_service = DiscoveryService(client)
     bill_service = BillService(client)
     member_service = MemberService(client)

@@ -1,3 +1,4 @@
+import asyncio
 import contextlib
 import json
 import logging
@@ -10,6 +11,7 @@ import mcp.types as mt
 from fastmcp.server.middleware import Middleware, MiddlewareContext
 
 from assemblymcp.config import settings
+from assemblymcp.initialization import ensure_master_list
 
 # Configure Logger
 logger = logging.getLogger("assemblymcp")
@@ -59,6 +61,29 @@ def _extract_tool_info(message: mt.CallToolRequest | mt.CallToolRequestParams) -
     if hasattr(message, "params"):
         return message.params.name, message.params.arguments
     return message.name, message.arguments
+
+
+class InitializationMiddleware(Middleware):
+    def __init__(self, client):
+        self.client = client
+        self._initialized = False
+        self._lock = asyncio.Lock()
+
+    async def on_call_tool(
+        self,
+        context: MiddlewareContext[mt.CallToolRequest],
+        call_next: Callable[[MiddlewareContext[mt.CallToolRequest]], Awaitable[mt.CallToolResult]],
+    ) -> mt.CallToolResult:
+        if self.client and not self._initialized:
+            async with self._lock:
+                if not self._initialized:
+                    try:
+                        await ensure_master_list(self.client)
+                        self._initialized = True
+                    except Exception as e:
+                        logger.critical(f"Failed to initialize master list: {e}")
+                        raise RuntimeError(f"Server initialization failed: {e}") from e
+        return await call_next(context)
 
 
 class LoggingMiddleware(Middleware):
