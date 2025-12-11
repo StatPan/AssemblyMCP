@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import os
@@ -51,7 +50,7 @@ mcp = FastMCP("AssemblyMCP")
 
 # Add Middleware (Order matters: last added is outermost)
 # Logging (outer) wraps Init (middle) wraps Caching (inner)
-mcp.add_middleware(CachingMiddleware())
+mcp.add_middleware(CachingMiddleware())       # Was innermost
 mcp.add_middleware(InitializationMiddleware(client))
 mcp.add_middleware(LoggingMiddleware())
 
@@ -517,8 +516,17 @@ async def get_committee_members(
     """
     위원회 구성원(위원 명단)을 조회합니다.
 
+    사용 팁:
+    1. 먼저 'committee_name'만 사용하여 위원 명단을 조회해 볼 수 있습니다.
+    2. 만약 결과가 없거나 에러가 발생하면, 이는 정확한 매칭이 아니거나 해당 위원회의 데이터가
+       존재하지 않을 수 있음을 의미합니다.
+    3. 이 경우 'get_committee_list' 도구를 먼저 호출하여 해당 위원회의 정확한
+       'committee_code'(HR_DEPT_CD)를 확인한 뒤, 이 'committee_code'로
+       'get_committee_members'를 다시 호출하면 가장 정확한 결과를 얻을 수 있습니다.
+    4. 일부 특별위원회는 OpenAPI에서 위원 명단 정보를 제공하지 않을 수 있습니다.
+
     - committee_code(HR_DEPT_CD)나 committee_name으로 조회 가능합니다.
-    - 위원회명이 불명확하면 먼저 get_committee_list로 정확한 이름/코드를 찾으세요.
+    - 위원회명이 불분명하면 먼저 get_committee_list로 정확한 이름/코드를 찾으세요.
     - 결과의 개별 의원 상세 정보가 필요하면 get_member_info를 조합하세요.
     - 다른 위원회 관련 데이터(일정, 회의록 등)는 list_api_services → get_api_spec → call_api_raw
       흐름으로 추가 조회할 수 있습니다.

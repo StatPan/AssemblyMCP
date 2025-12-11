@@ -685,6 +685,76 @@ class CommitteeService:
         raw_data = await self.client.get_data(
             service_id_or_name=self.COMMITTEE_MEMBER_LIST_ID, params=params
         )
+
+        # Explicitly check for INFO-200 (No corresponding data) from the raw API response
+        # Structure is usually { "service_name": [ { "head": [...] }, { "row": [...] } ] }
+        # or just { "RESULT": { "CODE": "...", "MESSAGE": "..." } }
+        service_key = list(raw_data.keys())[0] if raw_data else None
+        if (
+            service_key
+            and isinstance(raw_data[service_key], list)
+            and len(raw_data[service_key]) > 0
+        ):
+            head_section = raw_data[service_key][0].get("head")
+            if head_section and len(head_section) > 1:
+                result = head_section[1].get("RESULT")
+                if result and result.get("CODE") == "INFO-200":
+                    msg = result.get("MESSAGE")
+
+                    error_details = {
+                        "error_type": "DATA_NOT_FOUND",
+                        "api_code": result.get("CODE"),
+                        "api_message": msg,
+                        "query_info": {
+                            "committee_name": committee_name,
+                            "committee_code": committee_code,
+                        },
+                        "suggestion": (
+                            "이 위원회에 대한 위원 명단 데이터가 국회 OpenAPI에 없거나, "
+                            "검색 조건(이름)이 정확하지 않을 수 있습니다. "
+                            "get_committee_list()를 호출하여 정확한 committee_code를 "
+                            "확인 후 다시 시도하거나, 다른 검색어를 사용해보세요."
+                        ),
+                    }
+
+                    # If searched by name and no code, try to find suggestions
+                    if committee_name and not committee_code:
+                        try:
+                            candidates = await self.get_committee_list(
+                                committee_name=committee_name
+                            )
+                            valid_candidates = []
+                            for c in candidates:
+                                if c.committee_code and c.committee_code != "None":
+                                    valid_candidates.append(
+                                        f"{c.committee_name}(코드: {c.committee_code})"
+                                    )
+
+                            if valid_candidates:
+                                error_details["suggestion"] = (
+                                    f"입력하신 위원회명 '{committee_name}'에 대해 "
+                                    "위원 명단을 찾을 수 없습니다. "
+                                    f"다음과 같은 관련 위원회가 있습니다. "
+                                    f"해당 코드(committee_code)로 재시도해보세요: "
+                                    f"{', '.join(valid_candidates)}"
+                                )
+                            else:
+                                error_details["suggestion"] = (
+                                    f"'{committee_name}'(으)로 검색된 위원회 중 "
+                                    f"유효한 코드(HR_DEPT_CD)를 가진 위원회가 없습니다. "
+                                    "이는 해당 위원회 명단이 OpenAPI에 없거나, "
+                                    "이름이 정확하지 않을 수 있습니다. "
+                                    "get_committee_list()를 호출하여 "
+                                    "전체 위원회 목록을 확인해보세요."
+                                )
+                        except Exception as e:
+                            logger.warning(
+                                f"Error generating suggestions for '{committee_name}': {e}"
+                            )
+                            # Fallback to generic suggestion if suggestion generation fails
+
+                    return {"error": error_details}
+
         rows = _collect_rows(raw_data)
 
         # If a name was provided, post-filter in case the API lacks fuzzy matching
