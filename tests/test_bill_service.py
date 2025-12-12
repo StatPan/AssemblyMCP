@@ -145,9 +145,7 @@ async def test_get_bill_details(bill_service, mock_client):
 
     # Mock detail info response
     detail_response = {
-        "OS46YD0012559515463": [
-            {"row": [{"MAIN_CNTS": "This is the summary.", "RSON_CONT": "This is the reason."}]}
-        ]
+        "OS46YD0012559515463": [{"row": [{"MAIN_CNTS": "This is the summary.", "RSON_CONT": "This is the reason."}]}]
     }
 
     async def side_effect(service_id_or_name, params, **kwargs):
@@ -248,9 +246,7 @@ async def test_get_bill_details_uses_bill_no(bill_service, mock_client):
         ]
     }
 
-    detail_response = {
-        "OS46YD0012559515463": [{"row": [{"MAIN_CNTS": "Summary", "RSON_CONT": "Reason"}]}]
-    }
+    detail_response = {"OS46YD0012559515463": [{"row": [{"MAIN_CNTS": "Summary", "RSON_CONT": "Reason"}]}]}
 
     call_params = {}
 

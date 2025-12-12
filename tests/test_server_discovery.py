@@ -59,7 +59,5 @@ async def test_call_raw_success(discovery_service, mock_client):
 
     result = await discovery_service.call_raw("TEST_ID_1", params={"pSize": 5})
 
-    mock_client.get_data.assert_called_once_with(
-        service_id_or_name="TEST_ID_1", params={"pSize": 5}
-    )
+    mock_client.get_data.assert_called_once_with(service_id_or_name="TEST_ID_1", params={"pSize": 5})
     assert result == {"result": "success"}

@@ -137,10 +137,7 @@ class BillService:
         if date_value is None:
             return None
 
-        if isinstance(date_value, (int, float)):
-            candidate = str(int(date_value))
-        else:
-            candidate = str(date_value).strip()
+        candidate = str(int(date_value)) if isinstance(date_value, (int, float)) else str(date_value).strip()
 
         if not candidate:
             return None
@@ -229,13 +226,9 @@ class BillService:
             bill_no=bill_no or None,
             bill_name=self._bill_field(row, ["BILL_NAME", "BILL_NM", "BILL_TITLE"]),
             proposer=proposer_raw,
-            proposer_kind_name=self._bill_field(
-                row, ["PROPOSER_KIND", "PROPOSER_KIND_NAME", "PROPOSER_GBN_NM"]
-            ),
+            proposer_kind_name=self._bill_field(row, ["PROPOSER_KIND", "PROPOSER_KIND_NAME", "PROPOSER_GBN_NM"]),
             proc_status=self._normalize_proc_status(row),
-            committee=self._bill_field(
-                row, ["CURR_COMMITTEE", "CURR_COMMITTEE_NM", "CMIT_NM", "COMMITTEE"]
-            ),
+            committee=self._bill_field(row, ["CURR_COMMITTEE", "CURR_COMMITTEE_NM", "CMIT_NM", "COMMITTEE"]),
             propose_dt=self._parse_date(self._bill_field(row, ["PROPOSE_DT", "PROPOSE_DATE"])),
             committee_dt=self._parse_date(self._bill_field(row, ["COMMITTEE_DT", "CMIT_DT"])),
             proc_dt=self._parse_date(self._bill_field(row, ["PROC_DT"])),
@@ -382,8 +375,7 @@ class BillService:
         try:
             # Call detail API with the numeric BILL_NO
             logger.debug(
-                f"Fetching bill details: service_id={detail_service_id}, "
-                f"BILL_NO={bill_identifier}, bill_id={bill_id}"
+                f"Fetching bill details: service_id={detail_service_id}, BILL_NO={bill_identifier}, bill_id={bill_id}"
             )
 
             raw_data = await self.client.get_data(
@@ -401,9 +393,7 @@ class BillService:
 
             if rows:
                 row = rows[0]
-                logger.debug(
-                    f"Detail row contains {len(row)} keys. Sample keys: {list(row.keys())[:10]}"
-                )
+                logger.debug(f"Detail row contains {len(row)} keys. Sample keys: {list(row.keys())[:10]}")
 
                 # Try to extract summary
                 summary = (
@@ -499,27 +489,65 @@ class MemberService:
             return rows
 
         normalized = re.sub(r"\s+", "", name)
-        filtered = [
-            row for row in rows if normalized in re.sub(r"\s+", "", str(row.get("HG_NM", "")))
-        ]
+        filtered = [row for row in rows if normalized in re.sub(r"\s+", "", str(row.get("HG_NM", "")))]
         return filtered or rows
 
 
 class MeetingService:
     def __init__(self, client: AssemblyAPIClient):
         self.client = client
-        # OR137O001023MZ19321: 위원회 회의록 (Committee Meeting Records)
+
+        # OR137O001023MZ19321: 위원회 회의록 (Committee Meeting Records) - Requires specific date
+
         self.MEETING_INFO_ID = "OR137O001023MZ19321"
+
+        # O27DU0000960M511942: 위원회별 전체회의 일정 (Committee Schedule) - Good for range search
+
+        self.COMMITTEE_SCHEDULE_ID = "O27DU0000960M511942"
+
+    def _convert_unit_cd(self, age: int | str) -> str:
+        """
+
+
+        Convert assembly age to UNIT_CD format for schedule API.
+
+
+        Example: 22 -> 100022, 21 -> 100021
+
+
+        """
+
+        try:
+            val = int(age)
+
+            if val < 1000:
+                return str(100000 + val)
+
+            return str(val)
+
+        except ValueError:
+            return str(age)
 
     async def get_meeting_records(self, bill_id: str) -> list[dict[str, Any]]:
         """
+
+
         Get meeting records related to a bill.
+
+
         This uses a different API (OOWY4R001216HX11492) specifically for bill-related meetings.
+
+
         """
+
         # OOWY4R001216HX11492: 의안 위원회심사 회의정보 조회
+
         bill_meeting_id = "OOWY4R001216HX11492"
+
         params = {"BILL_ID": bill_id}
+
         raw_data = await self.client.get_data(service_id_or_name=bill_meeting_id, params=params)
+
         return _collect_rows(raw_data)
 
     async def search_meetings(
@@ -531,55 +559,94 @@ class MeetingService:
         limit: int = 10,
     ) -> list[dict[str, Any]]:
         """
-        Search for committee meetings.
+
+
+        Search for committee meetings using the Schedule API.
+
+
+        This allows date range searching which the Meeting Record API doesn't support well.
+
+
+
+
 
         Args:
+
+
             committee_name: Name of the committee (e.g., "법제사법위원회")
+
+
             date_start: Start date (YYYY-MM-DD)
+
+
             date_end: End date (YYYY-MM-DD)
+
+
             page: Page number (default 1)
+
+
             limit: Max results
+
+
         """
-        # Fetch larger batch (max 100) to ensure filtering doesn't reduce results too much
+
+        # Use Schedule API for better search capabilities
+
+        # Fetch larger batch to ensure filtering doesn't reduce results too much
+
         params = {"pIndex": page, "pSize": 100}
 
         if committee_name:
-            params["COMM_NAME"] = committee_name
+            params["COMMITTEE_NAME"] = committee_name
 
-        # The API usually takes a single date or a range if supported,
-        # but the spec for OR137O001023MZ19321 typically has CONF_DATE.
-        # Let's check if we can filter by date.
-        # If the API only supports exact match on CONF_DATE, we might need to fetch and filter.
-        # For now, let's pass it if provided, but we might need to refine this
-        # based on actual API behavior.
-        if date_start:
-            params["CONF_DATE"] = date_start.replace("-", "")
+        # Convert default age to UNIT_CD format (e.g. 22 -> 100022)
 
-        # Note: The API might not support range queries directly.
-        # We will fetch and filter if necessary, but for now let's try basic params.
+        params["UNIT_CD"] = self._convert_unit_cd(settings.default_assembly_age)
 
-        # Use configured default assembly age
-        params["DAE_NUM"] = settings.default_assembly_age
+        raw_data = await self.client.get_data(service_id_or_name=self.COMMITTEE_SCHEDULE_ID, params=params)
 
-        raw_data = await self.client.get_data(
-            service_id_or_name=self.MEETING_INFO_ID, params=params
-        )
         rows = _collect_rows(raw_data)
 
         logger.debug(
-            f"Meeting search returned {len(rows)} raw results for filters: "
-            f"committee={committee_name}, date_start={date_start}, date_end={date_end}"
+            f"Meeting schedule search returned {len(rows)} raw results for filters: committee={committee_name}"
         )
 
-        # Post-filtering if needed (e.g. date range)
+        # Post-filtering by date
+
         filtered = []
+
         for row in rows:
-            conf_date = row.get("CONF_DATE", "")
-            if date_start and conf_date < date_start.replace("-", ""):
+            # Schedule API returns MEETING_DATE (YYYY-MM-DD)
+
+            meeting_date = row.get("MEETING_DATE", "")
+
+            # Simple string comparison works for ISO format dates
+
+            if date_start and meeting_date < date_start:
                 continue
-            if date_end and conf_date > date_end.replace("-", ""):
+
+            if date_end and meeting_date > date_end:
                 continue
-            filtered.append(row)
+
+            # Remap fields to match expected output format (closer to Meeting Record API)
+
+            # MEETING_DATE -> CONF_DATE (without hyphens usually, but let's keep it ISO or normalize?)
+
+            # The original API used YYYYMMDD. Let's provide both or standardize.
+
+            # Let's keep MEETING_DATE as is and add CONF_DATE for compatibility.
+
+            normalized_row = row.copy()
+
+            normalized_row["CONF_DATE"] = meeting_date.replace("-", "")  # YYYYMMDD
+
+            normalized_row["CONF_TITLE"] = row.get("TITLE", "")
+
+            filtered.append(normalized_row)
+
+        # Sort by date descending (newest first)
+
+        filtered.sort(key=lambda x: x.get("MEETING_DATE", ""), reverse=True)
 
         result = filtered[:limit]
 
@@ -587,13 +654,9 @@ class MeetingService:
             logger.info(
                 f"No meeting records found. Filters used: "
                 f"committee='{committee_name}', date_start='{date_start}', "
-                f"date_end='{date_end}', page={page}. "
-                f"Raw results before filtering: {len(rows)}, after filtering: {len(filtered)}"
+                f"date_end='{date_end}'. "
+                f"Raw results: {len(rows)}"
             )
-            # Return a structured empty result with a message if possible,
-            # but the return type is list[dict].
-            # We can't easily change the return type without breaking schema.
-            # So we'll just return empty list, but the logger info above helps debugging.
 
         return result
 
@@ -636,9 +699,7 @@ class CommitteeService:
         if committee_name:
             params["COMMITTEE_NAME"] = committee_name
 
-        raw_data = await self.client.get_data(
-            service_id_or_name=self.COMMITTEE_INFO_ID, params=params
-        )
+        raw_data = await self.client.get_data(service_id_or_name=self.COMMITTEE_INFO_ID, params=params)
         rows = _collect_rows(raw_data)
 
         committees = []
@@ -682,19 +743,13 @@ class CommitteeService:
         if committee_name:
             params["COMMITTEE_NAME"] = committee_name
 
-        raw_data = await self.client.get_data(
-            service_id_or_name=self.COMMITTEE_MEMBER_LIST_ID, params=params
-        )
+        raw_data = await self.client.get_data(service_id_or_name=self.COMMITTEE_MEMBER_LIST_ID, params=params)
 
         # Explicitly check for INFO-200 (No corresponding data) from the raw API response
         # Structure is usually { "service_name": [ { "head": [...] }, { "row": [...] } ] }
         # or just { "RESULT": { "CODE": "...", "MESSAGE": "..." } }
         service_key = list(raw_data.keys())[0] if raw_data else None
-        if (
-            service_key
-            and isinstance(raw_data[service_key], list)
-            and len(raw_data[service_key]) > 0
-        ):
+        if service_key and isinstance(raw_data[service_key], list) and len(raw_data[service_key]) > 0:
             head_section = raw_data[service_key][0].get("head")
             if head_section and len(head_section) > 1:
                 result = head_section[1].get("RESULT")
@@ -720,15 +775,11 @@ class CommitteeService:
                     # If searched by name and no code, try to find suggestions
                     if committee_name and not committee_code:
                         try:
-                            candidates = await self.get_committee_list(
-                                committee_name=committee_name
-                            )
+                            candidates = await self.get_committee_list(committee_name=committee_name)
                             valid_candidates = []
                             for c in candidates:
                                 if c.committee_code and c.committee_code != "None":
-                                    valid_candidates.append(
-                                        f"{c.committee_name}(코드: {c.committee_code})"
-                                    )
+                                    valid_candidates.append(f"{c.committee_name}(코드: {c.committee_code})")
 
                             if valid_candidates:
                                 error_details["suggestion"] = (
@@ -748,14 +799,17 @@ class CommitteeService:
                                     "전체 위원회 목록을 확인해보세요."
                                 )
                         except Exception as e:
-                            logger.warning(
-                                f"Error generating suggestions for '{committee_name}': {e}"
-                            )
+                            logger.warning(f"Error generating suggestions for '{committee_name}': {e}")
                             # Fallback to generic suggestion if suggestion generation fails
 
                     return {"error": error_details}
 
         rows = _collect_rows(raw_data)
+
+        # CRITICAL FIX: The API sometimes ignores HR_DEPT_CD and returns all members.
+        # We must manually filter by committee_code if it was provided.
+        if committee_code:
+            rows = [row for row in rows if str(row.get("DEPT_CD") or row.get("HR_DEPT_CD") or "") == committee_code]
 
         # If a name was provided, post-filter in case the API lacks fuzzy matching
         if committee_name:

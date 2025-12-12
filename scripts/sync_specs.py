@@ -38,9 +38,7 @@ async def fetch_master_list(api_key: str, parser: SpecParser) -> list[dict]:
 
     # 1. Bootstrap: Get the endpoint for the Master List Service
     try:
-        logger.info(
-            f"Bootstrapping: Downloading spec for Master List Service ({MASTER_LIST_SERVICE_ID})..."
-        )
+        logger.info(f"Bootstrapping: Downloading spec for Master List Service ({MASTER_LIST_SERVICE_ID})...")
         # Force download to ensure we have the latest spec for the master list itself
         # Use infSeq=1 for this specific service as per previous observation
         await parser.download_if_changed(MASTER_LIST_SERVICE_ID, inf_seq=1)
@@ -237,8 +235,7 @@ async def main():
                 stats["failed"] += 1
 
         logger.info(
-            f"Progress: {i + len(chunk)}/{len(service_ids)} "
-            f"(Updated: {stats['updated']}, Failed: {stats['failed']})"
+            f"Progress: {i + len(chunk)}/{len(service_ids)} (Updated: {stats['updated']}, Failed: {stats['failed']})"
         )
 
     logger.info("\n=== Sync Complete ===")
