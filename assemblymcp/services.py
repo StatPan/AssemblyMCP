@@ -137,10 +137,7 @@ class BillService:
         if date_value is None:
             return None
 
-        if isinstance(date_value, (int, float)):
-            candidate = str(int(date_value))
-        else:
-            candidate = str(date_value).strip()
+        candidate = str(int(date_value)) if isinstance(date_value, (int, float)) else str(date_value).strip()
 
         if not candidate:
             return None
@@ -229,13 +226,9 @@ class BillService:
             bill_no=bill_no or None,
             bill_name=self._bill_field(row, ["BILL_NAME", "BILL_NM", "BILL_TITLE"]),
             proposer=proposer_raw,
-            proposer_kind_name=self._bill_field(
-                row, ["PROPOSER_KIND", "PROPOSER_KIND_NAME", "PROPOSER_GBN_NM"]
-            ),
+            proposer_kind_name=self._bill_field(row, ["PROPOSER_KIND", "PROPOSER_KIND_NAME", "PROPOSER_GBN_NM"]),
             proc_status=self._normalize_proc_status(row),
-            committee=self._bill_field(
-                row, ["CURR_COMMITTEE", "CURR_COMMITTEE_NM", "CMIT_NM", "COMMITTEE"]
-            ),
+            committee=self._bill_field(row, ["CURR_COMMITTEE", "CURR_COMMITTEE_NM", "CMIT_NM", "COMMITTEE"]),
             propose_dt=self._parse_date(self._bill_field(row, ["PROPOSE_DT", "PROPOSE_DATE"])),
             committee_dt=self._parse_date(self._bill_field(row, ["COMMITTEE_DT", "CMIT_DT"])),
             proc_dt=self._parse_date(self._bill_field(row, ["PROC_DT"])),
@@ -382,8 +375,7 @@ class BillService:
         try:
             # Call detail API with the numeric BILL_NO
             logger.debug(
-                f"Fetching bill details: service_id={detail_service_id}, "
-                f"BILL_NO={bill_identifier}, bill_id={bill_id}"
+                f"Fetching bill details: service_id={detail_service_id}, BILL_NO={bill_identifier}, bill_id={bill_id}"
             )
 
             raw_data = await self.client.get_data(
@@ -401,9 +393,7 @@ class BillService:
 
             if rows:
                 row = rows[0]
-                logger.debug(
-                    f"Detail row contains {len(row)} keys. Sample keys: {list(row.keys())[:10]}"
-                )
+                logger.debug(f"Detail row contains {len(row)} keys. Sample keys: {list(row.keys())[:10]}")
 
                 # Try to extract summary
                 summary = (
@@ -499,9 +489,7 @@ class MemberService:
             return rows
 
         normalized = re.sub(r"\s+", "", name)
-        filtered = [
-            row for row in rows if normalized in re.sub(r"\s+", "", str(row.get("HG_NM", "")))
-        ]
+        filtered = [row for row in rows if normalized in re.sub(r"\s+", "", str(row.get("HG_NM", "")))]
         return filtered or rows
 
 
@@ -561,9 +549,7 @@ class MeetingService:
         # Use configured default assembly age
         params["DAE_NUM"] = settings.default_assembly_age
 
-        raw_data = await self.client.get_data(
-            service_id_or_name=self.MEETING_INFO_ID, params=params
-        )
+        raw_data = await self.client.get_data(service_id_or_name=self.MEETING_INFO_ID, params=params)
         rows = _collect_rows(raw_data)
 
         logger.debug(
@@ -636,9 +622,7 @@ class CommitteeService:
         if committee_name:
             params["COMMITTEE_NAME"] = committee_name
 
-        raw_data = await self.client.get_data(
-            service_id_or_name=self.COMMITTEE_INFO_ID, params=params
-        )
+        raw_data = await self.client.get_data(service_id_or_name=self.COMMITTEE_INFO_ID, params=params)
         rows = _collect_rows(raw_data)
 
         committees = []
@@ -682,19 +666,13 @@ class CommitteeService:
         if committee_name:
             params["COMMITTEE_NAME"] = committee_name
 
-        raw_data = await self.client.get_data(
-            service_id_or_name=self.COMMITTEE_MEMBER_LIST_ID, params=params
-        )
+        raw_data = await self.client.get_data(service_id_or_name=self.COMMITTEE_MEMBER_LIST_ID, params=params)
 
         # Explicitly check for INFO-200 (No corresponding data) from the raw API response
         # Structure is usually { "service_name": [ { "head": [...] }, { "row": [...] } ] }
         # or just { "RESULT": { "CODE": "...", "MESSAGE": "..." } }
         service_key = list(raw_data.keys())[0] if raw_data else None
-        if (
-            service_key
-            and isinstance(raw_data[service_key], list)
-            and len(raw_data[service_key]) > 0
-        ):
+        if service_key and isinstance(raw_data[service_key], list) and len(raw_data[service_key]) > 0:
             head_section = raw_data[service_key][0].get("head")
             if head_section and len(head_section) > 1:
                 result = head_section[1].get("RESULT")
@@ -720,15 +698,11 @@ class CommitteeService:
                     # If searched by name and no code, try to find suggestions
                     if committee_name and not committee_code:
                         try:
-                            candidates = await self.get_committee_list(
-                                committee_name=committee_name
-                            )
+                            candidates = await self.get_committee_list(committee_name=committee_name)
                             valid_candidates = []
                             for c in candidates:
                                 if c.committee_code and c.committee_code != "None":
-                                    valid_candidates.append(
-                                        f"{c.committee_name}(코드: {c.committee_code})"
-                                    )
+                                    valid_candidates.append(f"{c.committee_name}(코드: {c.committee_code})")
 
                             if valid_candidates:
                                 error_details["suggestion"] = (
@@ -748,14 +722,29 @@ class CommitteeService:
                                     "전체 위원회 목록을 확인해보세요."
                                 )
                         except Exception as e:
-                            logger.warning(
-                                f"Error generating suggestions for '{committee_name}': {e}"
-                            )
+                            logger.warning(f"Error generating suggestions for '{committee_name}': {e}")
                             # Fallback to generic suggestion if suggestion generation fails
 
                     return {"error": error_details}
 
         rows = _collect_rows(raw_data)
+
+        # CRITICAL FIX: The API sometimes ignores HR_DEPT_CD and returns all members.
+        # We must manually filter by committee_code if it was provided.
+        if committee_code:
+            filtered_by_code = []
+            for row in rows:
+                # Field name can be DEPT_CD or HR_DEPT_CD depending on the specific API response
+                row_code = str(row.get("DEPT_CD") or row.get("HR_DEPT_CD") or "")
+                if row_code == committee_code:
+                    filtered_by_code.append(row)
+
+            # If the API returned data but nothing matched our code, return empty
+            if rows and not filtered_by_code:
+                return []
+
+            if filtered_by_code:
+                rows = filtered_by_code
 
         # If a name was provided, post-filter in case the API lacks fuzzy matching
         if committee_name:

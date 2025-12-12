@@ -43,9 +43,7 @@ def configure_logging():
     if settings.log_json:
         handler.setFormatter(JsonFormatter())
     else:
-        handler.setFormatter(
-            logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-        )
+        handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
 
     # Reset handlers to avoid duplication if called multiple times
     logger.handlers = []

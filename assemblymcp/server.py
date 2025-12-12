@@ -50,7 +50,7 @@ mcp = FastMCP("AssemblyMCP")
 
 # Add Middleware (Order matters: last added is outermost)
 # Logging (outer) wraps Init (middle) wraps Caching (inner)
-mcp.add_middleware(CachingMiddleware())       # Was innermost
+mcp.add_middleware(CachingMiddleware())  # Was innermost
 mcp.add_middleware(InitializationMiddleware(client))
 mcp.add_middleware(LoggingMiddleware())
 
@@ -76,8 +76,7 @@ def _require_service[ServiceT](service: ServiceT | None) -> ServiceT:
     """Ensure the API client and requested service are available."""
     if service is None:
         raise RuntimeError(
-            "Assembly API client is not ready. "
-            "Set the ASSEMBLY_API_KEY environment variable and restart the server."
+            "Assembly API client is not ready. Set the ASSEMBLY_API_KEY environment variable and restart the server."
         )
     return service
 
@@ -545,9 +544,7 @@ def main():
     sys.stdout.reconfigure(line_buffering=True)
     # Validate settings on startup (but don't fail if API key is missing yet)
     if not settings.assembly_api_key:
-        logger.warning(
-            "ASSEMBLY_API_KEY is not configured. The server will run but tools will fail."
-        )
+        logger.warning("ASSEMBLY_API_KEY is not configured. The server will run but tools will fail.")
 
     # Check for transport configuration
     transport = os.getenv("MCP_TRANSPORT", "stdio").lower()
