@@ -809,19 +809,7 @@ class CommitteeService:
         # CRITICAL FIX: The API sometimes ignores HR_DEPT_CD and returns all members.
         # We must manually filter by committee_code if it was provided.
         if committee_code:
-            filtered_by_code = []
-            for row in rows:
-                # Field name can be DEPT_CD or HR_DEPT_CD depending on the specific API response
-                row_code = str(row.get("DEPT_CD") or row.get("HR_DEPT_CD") or "")
-                if row_code == committee_code:
-                    filtered_by_code.append(row)
-
-            # If the API returned data but nothing matched our code, return empty
-            if rows and not filtered_by_code:
-                return []
-
-            if filtered_by_code:
-                rows = filtered_by_code
+            rows = [row for row in rows if str(row.get("DEPT_CD") or row.get("HR_DEPT_CD") or "") == committee_code]
 
         # If a name was provided, post-filter in case the API lacks fuzzy matching
         if committee_name:
