@@ -254,13 +254,19 @@ class BillService:
         """
         params = {
             "AGE": age,  # REQUIRED
-            "BILL_ID": bill_id,
             "BILL_NAME": bill_name,
             "PROPOSE_DT": propose_dt,
             "PROC_RESULT_CD": proc_status,
             "pIndex": page,
             "pSize": limit,
         }
+        
+        if bill_id:
+            # Check if bill_id is numeric (likely a BILL_NO)
+            if bill_id.isdigit():
+                params["BILL_NO"] = bill_id
+            else:
+                params["BILL_ID"] = bill_id
         # Filter out None values
         params = {k: v for k, v in params.items() if v is not None}
 
@@ -322,20 +328,12 @@ class BillService:
                 target_bill = bills[0]
         else:
             # Strategy: Try to find the bill in recent sessions
-            # If bill_id looks like a numeric ID (e.g. 2214308), we can't search by BILL_ID in
-            # get_bill_info because get_bill_info expects the alphanumeric ID (PRC_...).
-            # However, we can try to find it by BILL_NO if we had a way to search by BILL_NO.
-            # The current get_bill_info implementation maps `bill_id` arg to `BILL_ID` param.
-
-            # Heuristic: If ID is numeric and length is around 7, it's likely a BILL_NO.
-            is_numeric_id = bill_id.isdigit() and len(bill_id) < 10
-
-            if not is_numeric_id:
-                for probe_age in ["22", "21"]:
-                    bills = await self.get_bill_info(age=probe_age, bill_id=bill_id)
-                    if bills:
-                        target_bill = bills[0]
-                        break
+            # Now that get_bill_info supports BILL_NO, we can try searching directly
+            for probe_age in ["22", "21"]:
+                bills = await self.get_bill_info(age=probe_age, bill_id=bill_id)
+                if bills:
+                    target_bill = bills[0]
+                    break
 
         # If we didn't find a bill object but have a numeric ID, we might still be able to fetch
         # details directly using the numeric ID as BILL_NO.
