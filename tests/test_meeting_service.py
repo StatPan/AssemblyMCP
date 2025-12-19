@@ -25,11 +25,13 @@ async def test_search_meetings_by_committee(meeting_service, mock_client):
                 "head": [{"RESULT": {"CODE": "INFO-000", "MESSAGE": "Success"}}],
                 "row": [
                     {
+                        "MEETING_DATE": "2024-11-20",
                         "CONF_DATE": "20241120",
                         "COMM_NAME": "법제사법위원회",
                         "TITLE": "제410회국회(정기회) 제10차 법제사법위원회",
                     },
                     {
+                        "MEETING_DATE": "2024-11-15",
                         "CONF_DATE": "20241115",
                         "COMM_NAME": "법제사법위원회",
                         "TITLE": "제410회국회(정기회) 제9차 법제사법위원회",
@@ -49,8 +51,8 @@ async def test_search_meetings_by_committee(meeting_service, mock_client):
     # Verify API call
     mock_client.get_data.assert_called_once()
     call_args = mock_client.get_data.call_args
-    assert call_args.kwargs["service_id_or_name"] == "OR137O001023MZ19321"
-    assert call_args.kwargs["params"]["COMM_NAME"] == "법제사법위원회"
+    assert call_args.kwargs["service_id_or_name"] == "O27DU0000960M511942"
+    assert call_args.kwargs["params"]["COMMITTEE_NAME"] == "법제사법위원회"
 
 
 @pytest.mark.asyncio
@@ -72,10 +74,12 @@ async def test_search_meetings_by_date_range(meeting_service, mock_client):
                 "head": [{"RESULT": {"CODE": "INFO-000", "MESSAGE": "Success"}}],
                 "row": [
                     {
+                        "MEETING_DATE": "2024-11-20",
                         "CONF_DATE": "20241120",
                         "COMM_NAME": "법제사법위원회",
                     },
                     {
+                        "MEETING_DATE": "2024-11-10",
                         "CONF_DATE": "20241110",  # Should be filtered out
                         "COMM_NAME": "법제사법위원회",
                     },
@@ -94,5 +98,7 @@ async def test_search_meetings_by_date_range(meeting_service, mock_client):
     # Verify API call
     mock_client.get_data.assert_called_once()
     call_args = mock_client.get_data.call_args
-    # Check that date_start was passed to params (formatted)
-    assert call_args.kwargs["params"]["CONF_DATE"] == "20241115"
+    # Service ID should be the Schedule API
+    assert call_args.kwargs["service_id_or_name"] == "O27DU0000960M511942"
+    # Date filtering is done in memory, so no date params sent to API
+    assert "CONF_DATE" not in call_args.kwargs["params"]
