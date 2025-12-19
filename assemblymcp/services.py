@@ -674,9 +674,11 @@ class MeetingService:
         params = {"pIndex": page, "pSize": limit}
 
         if unit_cd:
-            # The API expects just the number string, e.g. "22"
-            # If user provides "22대", we strip non-digits just in case.
+            # The API expects 1000xx format (e.g., 100022 for 22nd assembly)
+            # If user provides "22" or "22대", we handle it gracefully.
             clean_unit_cd = re.sub(r"[^0-9]", "", str(unit_cd))
+            if len(clean_unit_cd) > 0 and len(clean_unit_cd) <= 2:
+                clean_unit_cd = f"1000{clean_unit_cd}"
             params["UNIT_CD"] = clean_unit_cd
 
         raw_data = await self.client.get_data(service_id_or_name=service_id, params=params)
