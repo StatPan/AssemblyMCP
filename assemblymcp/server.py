@@ -259,7 +259,7 @@ async def call_api_raw(service_id: str, params: str = "{}") -> str:
     - 절차: list_api_services로 ID 찾기 → get_api_spec로 파라미터 확인 → 여기서 호출.
     - 응답을 받은 뒤, 필요한 경우 다른 고수준 툴(예: get_member_info, get_meeting_records)로
       후속 검색을 연쇄 호출해 답을 완성하세요.
-    
+
     [주의] 이 툴은 입력값을 변환하지 않고 그대로 전송합니다.
     - 특히 'UNIT_CD'(대수) 파라미터는 반드시 '1000xx' 형식을 사용해야 합니다.
       (예: 22대 국회 -> "100022", 21대 국회 -> "100021")
