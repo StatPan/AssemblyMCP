@@ -210,7 +210,6 @@ class BillService:
 
     def _build_bill(self, row: dict[str, Any]) -> Bill:
         proposer_raw = self._bill_field(row, ["PROPOSER", "PROPOSER_MAIN_NM", "RST_PROPOSER"])
-        proposer_text = proposer_raw or None
         primary_proposer, proposer_count = self._extract_proposer_info(proposer_raw or "")
 
         # Extract both BILL_ID and BILL_NO separately
@@ -222,20 +221,19 @@ class BillService:
             bill_id = bill_no
 
         return Bill(
-            bill_id=bill_id,
-            bill_no=bill_no or None,
-            bill_name=self._bill_field(row, ["BILL_NAME", "BILL_NM", "BILL_TITLE"]),
-            proposer=proposer_raw,
-            proposer_kind_name=self._bill_field(row, ["PROPOSER_KIND", "PROPOSER_KIND_NAME", "PROPOSER_GBN_NM"]),
-            proc_status=self._normalize_proc_status(row),
-            committee=self._bill_field(row, ["CURR_COMMITTEE", "CURR_COMMITTEE_NM", "CMIT_NM", "COMMITTEE"]),
-            propose_dt=self._parse_date(self._bill_field(row, ["PROPOSE_DT", "PROPOSE_DATE"])),
-            committee_dt=self._parse_date(self._bill_field(row, ["COMMITTEE_DT", "CMIT_DT"])),
-            proc_dt=self._parse_date(self._bill_field(row, ["PROC_DT"])),
-            link_url=self._bill_field(row, ["LINK_URL", "DETAIL_LINK"]),
-            proposer_text=proposer_text,
-            primary_proposer=primary_proposer,
-            proposer_count=proposer_count,
+            BILL_ID=bill_id,
+            BILL_NO=bill_no or None,
+            BILL_NAME=self._bill_field(row, ["BILL_NAME", "BILL_NM", "BILL_TITLE"]),
+            PROPOSER=proposer_raw,
+            PROPOSER_KIND_NM=self._bill_field(row, ["PROPOSER_KIND", "PROPOSER_KIND_NAME", "PROPOSER_GBN_NM"]),
+            PROC_STATUS=self._normalize_proc_status(row),
+            CURR_COMMITTEE=self._bill_field(row, ["CURR_COMMITTEE", "CURR_COMMITTEE_NM", "CMIT_NM", "COMMITTEE"]),
+            PROPOSE_DT=self._parse_date(self._bill_field(row, ["PROPOSE_DT", "PROPOSE_DATE"])),
+            COMMITTEE_DT=self._parse_date(self._bill_field(row, ["COMMITTEE_DT", "CMIT_DT"])),
+            PROC_DT=self._parse_date(self._bill_field(row, ["PROC_DT"])),
+            LINK_URL=self._bill_field(row, ["LINK_URL", "DETAIL_LINK"]),
+            PRIMARY_PROPOSER=primary_proposer,
+            PROPOSER_COUNT=proposer_count,
         )
 
     async def get_bill_info(
@@ -243,6 +241,7 @@ class BillService:
         age: str,  # REQUIRED by spec: 'AGE'
         bill_id: str | None = None,
         bill_name: str | None = None,
+        proposer: str | None = None,
         propose_dt: str | None = None,
         proc_status: str | None = None,
         page: int = 1,
@@ -256,6 +255,7 @@ class BillService:
             "AGE": age,  # REQUIRED
             "BILL_ID": bill_id,
             "BILL_NAME": bill_name,
+            "PROPOSER": proposer,
             "PROPOSE_DT": propose_dt,
             "PROC_RESULT_CD": proc_status,
             "pIndex": page,
@@ -301,7 +301,7 @@ class BillService:
         bills = await self.get_bill_info(age="22", page=page, limit=max(limit, 20))
 
         # Sort by proposal date descending (ISO format strings sort correctly)
-        bills.sort(key=lambda x: x.propose_dt if x.propose_dt else "", reverse=True)
+        bills.sort(key=lambda x: x.PROPOSE_DT if x.PROPOSE_DT else "", reverse=True)
 
         return bills[:limit]
 
@@ -346,14 +346,14 @@ class BillService:
             )
             # Create a minimal Bill object to hold the ID
             target_bill = Bill(
-                bill_id=bill_id,  # Use the numeric ID as ID for now
-                bill_no=bill_id,
-                bill_name="Unknown (Direct Fetch)",
-                proposer="Unknown",
-                proposer_kind_name="Unknown",
-                proc_status="Unknown",
-                committee="Unknown",
-                link_url="",
+                BILL_ID=bill_id,  # Use the numeric ID as ID for now
+                BILL_NO=bill_id,
+                BILL_NAME="Unknown (Direct Fetch)",
+                PROPOSER="Unknown",
+                PROPOSER_KIND_NM="Unknown",
+                PROC_STATUS="Unknown",
+                CURR_COMMITTEE="Unknown",
+                LINK_URL="",
             )
 
         if not target_bill:
@@ -370,7 +370,7 @@ class BillService:
 
         # Determine which identifier to use
         # Priority: use bill_no if available, otherwise try bill_id as fallback
-        bill_identifier = target_bill.bill_no if target_bill.bill_no else target_bill.bill_id
+        bill_identifier = target_bill.BILL_NO if target_bill.BILL_NO else target_bill.BILL_ID
 
         try:
             # Call detail API with the numeric BILL_NO
@@ -466,7 +466,7 @@ class BillService:
                 "이 문제가 지속되면 AssemblyMCP 이슈 트래커에 보고해주세요."
             )
 
-        return BillDetail(**target_bill.model_dump(), summary=summary, reason=reason)
+        return BillDetail(**target_bill.model_dump(), MAJOR_CONTENT=summary, PROPOSE_REASON=reason)
 
 
 class MemberService:
@@ -709,12 +709,12 @@ class CommitteeService:
             try:
                 committees.append(
                     Committee(
-                        committee_code=str(row.get("HR_DEPT_CD", "")),
-                        committee_name=str(row.get("COMMITTEE_NAME", "")),
-                        committee_div=str(row.get("CMT_DIV_NM", "")),
-                        chairperson=row.get("HG_NM"),
-                        member_count=int(row.get("CURR_CNT")) if row.get("CURR_CNT") else None,
-                        limit_count=int(row.get("LIMIT_CNT")) if row.get("LIMIT_CNT") else None,
+                        HR_DEPT_CD=str(row.get("HR_DEPT_CD", "")),
+                        COMMITTEE_NAME=str(row.get("COMMITTEE_NAME", "")),
+                        CMT_DIV_NM=str(row.get("CMT_DIV_NM", "")),
+                        HG_NM=row.get("HG_NM"),
+                        CURR_CNT=int(row.get("CURR_CNT")) if row.get("CURR_CNT") else None,
+                        LIMIT_CNT=int(row.get("LIMIT_CNT")) if row.get("LIMIT_CNT") else None,
                     )
                 )
             except (ValueError, TypeError, KeyError) as e:
