@@ -71,9 +71,30 @@ class Committee(BaseModel):
         }
     )
 
-    HR_DEPT_CD: str = Field(..., description="위원회 코드.")
+    HR_DEPT_CD: str = Field(..., alias="committee_code", description="위원회 코드.")
     COMMITTEE_NAME: str = Field(..., description="위원회명.")
     CMT_DIV_NM: str | None = Field(None, description="위원회 구분. 예: 상임위원회, 특별위원회.")
     HG_NM: str | None = Field(None, description="위원장 이름.")
     CURR_CNT: int | None = Field(None, description="현원.")
     LIMIT_CNT: int | None = Field(None, description="정원.")
+
+
+class LegislativeReport(BaseModel):
+    """
+    국회 전문 보고서 및 뉴스 데이터 모델.
+    """
+    source: str = Field(..., description="데이터 출처 (예: 국회예산정책처, 국회뉴스ON)")
+    title: str = Field(..., description="보고서 또는 뉴스 제목")
+    date: str | None = Field(None, description="발간 또는 등록 일자")
+    link: str | None = Field(None, description="상세 원문 링크")
+    report_type: str | None = Field(None, description="데이터 유형 (분석보고서, 뉴스 등)")
+
+
+class CommitteeWorkSummary(BaseModel):
+    """
+    위원회 활동 현황 통합 모델.
+    """
+    committee_name: str = Field(..., description="위원회명")
+    pending_bills_sample: list[Bill] = Field(default_factory=list, description="현재 계류 중인 주요 의안 샘플")
+    related_reports: list[LegislativeReport] = Field(default_factory=list, description="위원회 관련 전문 보고서 및 소식")
+    instruction: str | None = Field(None, description="사용자(LLM) 가이드 메시지")

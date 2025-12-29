@@ -57,12 +57,12 @@ async def test_get_plenary_schedule_no_formatting_for_full_code(meeting_service,
 
 
 @pytest.mark.asyncio
-async def test_call_raw_no_formatting(discovery_service, mock_client):
-    """Verify that call_raw does NOT format UNIT_CD."""
+async def test_call_raw_auto_formatting(discovery_service, mock_client):
+    """Verify that call_raw DOES format UNIT_CD now (Agent-centric strategy)."""
     await discovery_service.call_raw(service_id_or_name="TEST_ID", params={"UNIT_CD": "22"})
 
     call_args = mock_client.get_data.call_args
     assert call_args is not None
     params = call_args.kwargs["params"]
-    # Should remain exactly "22"
-    assert params["UNIT_CD"] == "22"
+    # Should be automatically formatted to "100022"
+    assert params["UNIT_CD"] == "100022"

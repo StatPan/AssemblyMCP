@@ -113,17 +113,18 @@ async def get_assembly_info() -> str:
             f"API 키 상태: {api_key_status}\n"
             f"사용 가능한 서비스(Raw): {service_count}개 (약 270개 엔드포인트)\n\n"
             "핵심 원칙: 고수준 툴에 기능이 없다고 검색을 중단하지 마세요.\n"
-            "항상 다음 조합으로 해결 가능합니다.\n"
-            "👉 list_api_services → get_api_spec → call_api_raw\n\n"
-            "빠른 워크플로우 예시:\n"
-            "1) 종합 분석: analyze_legislative_issue('주제') -> 한 번에 리포트 생성\n"
-            "2) 의안 탐색: search_bills(keyword='...') → get_bill_details(ID) → "
-            "get_bill_history(ID) (타임라인/연혁) → search_meetings(bill_id=ID) (회의 상세)\n"
-            "3) 위원회: get_committee_info(name='...') -> 상세 정보 및 위원 명단 확인\n"
-            "4) 기타 데이터: list_api_services(키워드)로 서비스 ID 확보 후 "
-            "get_api_spec에서 필수 파라미터 확인 → call_api_raw로 직접 호출\n\n"
+            "AssemblyMCP는 LLM의 사용 편의성을 극대화하는 지능형 기능을 제공합니다.\n\n"
+            "👉 핵심 워크플로우:\n"
+            "1) 종합 분석: analyze_legislative_issue('주제') -> 법안, 회의록, 의원 통합 리포트\n"
+            "2) 전문 데이터: get_legislative_reports('주제') -> NABO(예산정책처) 전문 분석 보고서 및 뉴스 링크 제공\n"
+            "3) 위원회 현황: get_committee_work_summary('위원회명') -> 해당 위원회의 계류 법안과 보고서 통합 뷰\n"
+            "4) 의안 탐색: search_bills() → get_bill_details() → get_bill_history() (타임라인/연혁)\n\n"
+            "👉 지능형 도구 (LLM을 위한 인프라):\n"
+            "- get_api_code_guide: UNIT_CD(대수), PROC_STATUS(처리상태) 등 복잡한 코드값 사전 제공\n"
+            "- 자동 보정: call_api_raw 호출 시 UNIT_CD='22' 등을 입력해도 서버가 자동으로 '100022'로 보정하여 호출합니다.\n"
+            "- list_api_services → get_api_spec → call_api_raw 조합으로 어떤 정보든 조회 가능합니다.\n\n"
             "팁: 특정 주제에 맞는 서비스가 안 보이면 키워드를 바꿔 여러 번 검색하고, "
-            "도구가 모자라거나 불가능하다고 섣불리 결론 내리지 마세요."
+            "데이터가 부족하다고 섣불리 결론 내리지 마세요."
         )
     except Exception as e:
         traceback.print_exc()
@@ -399,6 +400,69 @@ async def analyze_legislative_issue(topic: str, limit: int = 5) -> dict[str, Any
     """
     service = _require_service(smart_service)
     return await service.analyze_legislative_issue(topic, limit=limit)
+
+
+@mcp.tool()
+async def get_legislative_reports(keyword: str, limit: int = 5) -> list[dict[str, Any]]:
+    """
+    특정 주제나 법안과 관련된 국회 전문 보고서(NABO Focus 등) 및 뉴스를 조회합니다.
+    단순 법안 정보를 넘어 전문가의 분석 시각을 제공할 때 유용합니다.
+
+    Args:
+        keyword: 검색 키워드 (예: "종합부동산세", "인공지능").
+        limit: 검색 결과 수 (기본 5).
+    """
+    service = _require_service(smart_service)
+    reports = await service.get_legislative_reports(keyword, limit=limit)
+    return [r.model_dump(exclude_none=True) for r in reports]
+
+
+@mcp.tool()
+async def get_committee_work_summary(committee_name: str) -> dict[str, Any]:
+    """
+    특정 위원회의 현재 활동 현황(계류 의안, 관련 보고서 등)을 한 번에 조회합니다.
+    엔티티 간의 연관 데이터를 매핑하여 입체적인 정보를 제공합니다.
+
+    Args:
+        committee_name: 위원회명 (예: "법제사법위원회", "환경노동위원회").
+    """
+    service = _require_service(smart_service)
+    summary = await service.get_committee_work_summary(committee_name)
+    return summary.model_dump(exclude_none=True)
+
+
+@mcp.tool()
+async def get_api_code_guide() -> dict[str, Any]:
+    """
+    국회 API에서 공통으로 사용되는 코드값(대수, 처리상태 등) 가이드를 반환합니다.
+    LLM이 call_api_raw를 호출하기 전 파라미터 값을 결정할 때 참고하세요.
+    """
+    return {
+        "UNIT_CD (국회 대수)": {
+            "description": "국회 대수를 나타내는 6자리 코드",
+            "mapping": {
+                "22대": "100022",
+                "21대": "100021",
+                "20대": "100020"
+            },
+            "note": "AssemblyMCP가 '22' 같은 입력을 자동으로 '100022'로 보정해줍니다."
+        },
+        "PROC_RESULT_CD (의안 처리상태)": {
+            "description": "의안의 현재 처리 단계 또는 결과 코드",
+            "codes": {
+                "1000": "접수",
+                "2000": "위원회 심사",
+                "3000": "본회의 심의",
+                "4000": "의결 (가결/수정가결 등)",
+                "5000": "폐기/철회"
+            }
+        },
+        "Common_Parameters": {
+            "pIndex": "페이지 번호 (기본: 1)",
+            "pSize": "한 페이지당 결과 수 (기본: 10, 최대: 100)",
+            "Type": "응답 형식 (json 권장)"
+        }
+    }
 
 
 @mcp.tool()

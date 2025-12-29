@@ -36,6 +36,37 @@ class DiscoveryService:
     def __init__(self, client: AssemblyAPIClient):
         self.client = client
 
+    def _normalize_params(self, params: dict[str, Any]) -> dict[str, Any]:
+        """
+        국회 API 공통 파라미터 형식을 자동으로 보정합니다.
+        """
+        normalized = params.copy()
+
+        # 1. UNIT_CD 보정 (22 -> 100022)
+        if "UNIT_CD" in normalized:
+            val = str(normalized["UNIT_CD"])
+            digits = re.sub(r"[^0-9]", "", val)
+            if digits and len(digits) <= 2:
+                normalized["UNIT_CD"] = f"1000{digits.zfill(2)}"
+            elif digits and len(digits) == 6 and digits.startswith("1000"):
+                normalized["UNIT_CD"] = digits
+
+        # 2. AGE 보정 (100022 -> 22) - AGE는 보통 짧은 형식을 선호
+        if "AGE" in normalized:
+            val = str(normalized["AGE"])
+            if len(val) == 6 and val.startswith("1000"):
+                normalized["AGE"] = val[4:]
+
+        # 3. pIndex, pSize 타입 강제 (숫자형으로)
+        for num_param in ["pIndex", "pSize"]:
+            if num_param in normalized:
+                try:
+                    normalized[num_param] = int(normalized[num_param])
+                except (ValueError, TypeError):
+                    pass
+
+        return normalized
+
     async def list_services(self, keyword: str = "") -> list[dict[str, str]]:
         """
         Search for available API services by keyword.
@@ -75,8 +106,11 @@ class DiscoveryService:
         """
         Call a specific API service with raw parameters.
         """
+        # 파라미터 자동 보정 적용
+        normalized_params = self._normalize_params(params)
+        
         try:
-            return await self.client.get_data(service_id_or_name=service_id_or_name, params=params)
+            return await self.client.get_data(service_id_or_name=service_id_or_name, params=normalized_params)
         except AssemblyAPIError as e:
             error_msg = str(e)
 
