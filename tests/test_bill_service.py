@@ -48,10 +48,10 @@ async def test_get_bill_info_success(bill_service, mock_client):
 
     assert len(bills) == 1
     assert isinstance(bills[0], Bill)
-    assert bills[0].bill_id == "PRC_T2T3T4T5T6T7T8T9"
-    assert bills[0].bill_no == "2100001"
-    assert bills[0].bill_name == "Test Bill"
-    assert bills[0].proposer == "Test Proposer"
+    assert bills[0].BILL_ID == "PRC_T2T3T4T5T6T7T8T9"
+    assert bills[0].BILL_NO == "2100001"
+    assert bills[0].BILL_NAME == "Test Bill"
+    assert bills[0].PROPOSER == "Test Proposer"
 
     # Verify API call parameters
     mock_client.get_data.assert_called_once()
@@ -96,7 +96,7 @@ async def test_search_bills_fallback(bill_service, mock_client):
     bills = await bill_service.search_bills("keyword")
 
     assert len(bills) == 1
-    assert bills[0].bill_name == "Fallback Bill"
+    assert bills[0].BILL_NAME == "Fallback Bill"
     assert mock_client.get_data.call_count == 2
 
 
@@ -119,9 +119,9 @@ async def test_get_recent_bills_sorting(bill_service, mock_client):
     bills = await bill_service.get_recent_bills(limit=3)
 
     assert len(bills) == 3
-    assert bills[0].bill_name == "New"  # 2023-12-31
-    assert bills[1].bill_name == "Mid"  # 2023-06-01
-    assert bills[2].bill_name == "Old"  # 2023-01-01
+    assert bills[0].BILL_NAME == "New"  # 2023-12-31
+    assert bills[1].BILL_NAME == "Mid"  # 2023-06-01
+    assert bills[2].BILL_NAME == "Old"  # 2023-01-01
 
 
 @pytest.mark.asyncio
@@ -163,11 +163,11 @@ async def test_get_bill_details(bill_service, mock_client):
     detail = await bill_service.get_bill_details("PRC_X1Y2Z3A4B5C6D7E8")
 
     assert detail is not None
-    assert detail.bill_id == "PRC_X1Y2Z3A4B5C6D7E8"
-    assert detail.bill_no == "2200001"
-    assert detail.bill_name == "Detail Bill"
-    assert detail.summary == "This is the summary."
-    assert detail.reason == "This is the reason."
+    assert detail.BILL_ID == "PRC_X1Y2Z3A4B5C6D7E8"
+    assert detail.BILL_NO == "2200001"
+    assert detail.BILL_NAME == "Detail Bill"
+    assert detail.MAJOR_CONTENT == "This is the summary."
+    assert detail.PROPOSE_REASON == "This is the reason."
 
 
 @pytest.mark.asyncio
@@ -195,8 +195,8 @@ async def test_bill_model_captures_both_ids(bill_service, mock_client):
     assert len(bills) == 1
     bill = bills[0]
     # Verify both fields are captured separately
-    assert bill.bill_id == "PRC_ALPHA123BETA456"
-    assert bill.bill_no == "2123709"
+    assert bill.BILL_ID == "PRC_ALPHA123BETA456"
+    assert bill.BILL_NO == "2123709"
 
 
 @pytest.mark.asyncio
@@ -223,8 +223,8 @@ async def test_bill_model_fallback_when_bill_id_missing(bill_service, mock_clien
     assert len(bills) == 1
     bill = bills[0]
     # bill_id should fallback to BILL_NO value
-    assert bill.bill_id == "2123709"
-    assert bill.bill_no == "2123709"
+    assert bill.BILL_ID == "2123709"
+    assert bill.BILL_NO == "2123709"
 
 
 @pytest.mark.asyncio

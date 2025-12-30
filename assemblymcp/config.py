@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     cache_ttl_seconds: int = Field(300, description="Cache TTL in seconds")
     cache_max_size: int = Field(100, description="Maximum number of cached items")
 
-    model_config = SettingsConfigDict(env_file=".env", env_prefix="ASSEMBLY_", extra="ignore")
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 
 settings = Settings()

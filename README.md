@@ -25,6 +25,19 @@ Claude와 같은 AI 에이전트가 국회의 의안, 회의록, 의원 정보 �
 
 *   **국회의원 정보**
     *   `get_member_info(name)`: 국회의원의 인적 사항, 소속 정당, 지역구 등을 조회합니다.
+    *   `get_representative_report(name)`: **[지능형]** 의원의 기본 정보, 발의 법안, 위원회 경력, 투표 이력을 통합한 종합 리포트를 생성합니다.
+    *   `get_member_committee_careers(name)`: 의원의 상세 위원회 활동 경력을 조회합니다.
+
+*   **표결 및 투표 분석**
+    *   `get_bill_voting_results(bill_id)`: **[지능형]** 특정 의안의 본회의 표결 결과(찬성/반대/기권)와 정당별 투표 경향을 분석합니다.
+    *   `analyze_voting_trends(topic)`: **[지능형]** 특정 주제(예: "AI", "세제") 관련 법안들의 본회의 투표 성향을 분석합니다.
+    *   `get_member_voting_history(...)`: 특정 의원 또는 의안의 개별 표결 기록을 조회합니다.
+
+*   **지능형 분석 및 복합 조회**
+    *   `analyze_legislative_issue(topic)`: **[지능형]** 특정 주제에 대한 법안, 회의록, 주요 의원을 통합 분석하여 리포트를 생성합니다.
+    *   `get_bill_history(bill_id)`: **[지능형]** 의안의 발의부터 처리까지의 전 생애주기를 타임라인 형태로 통합 제공합니다.
+    *   `get_legislative_reports(keyword)`: **[지능형]** 국회예산정책처(NABO) 전문 보고서 및 국회 뉴스 데이터를 실시간 연계하여 제공합니다.
+    *   `get_committee_work_summary(committee_name)`: **[지능형]** 위원회별 계류 의안과 관련 보고서를 통합하여 현황을 요약합니다.
 
 *   **기타 및 고급 기능**
     *   `get_assembly_info()`: 서버 상태 및 사용 가능한 API 정보를 확인합니다.
@@ -34,7 +47,11 @@ Claude와 같은 AI 에이전트가 국회의 의안, 회의록, 의원 정보 �
 ## LLM 사용 가이드 (중요)
 
 - 이 서버는 국회 OpenAPI **약 270개**를 모두 사용할 수 있습니다. 고수준 툴에 없다고 해서 “기능이 없다”라고 답하지 마세요.
-- 기본 전략: `list_api_services(keyword)` → `get_api_spec(service_id)` → `call_api_raw(service_id, params)` 조합으로 어떤 정보든 조회할 수 있습니다.
+- **지능형 워크플로우 우선 사용**: 단순히 데이터를 나열하기보다 `analyze_` 또는 `get_..._report` 계열의 도구를 사용하여 입체적인 인사이트를 제공하세요.
+    - **주제 분석**: `analyze_legislative_issue("AI")` -> 법안 + 회의 + 의원 통합 정보
+    - **의원 분석**: `get_representative_report("의원명")` -> 인적사항 + 법안 + 경력 + 투표성향
+    - **의결 분석**: `get_bill_voting_results("의안ID")` -> 찬반 통계 + 정당별 경향
+- **표준 가이드**: `list_api_services(keyword)` → `get_api_spec(service_id)` → `call_api_raw(service_id, params)` 조합으로 어떤 정보든 조회할 수 있습니다.
 - 키워드는 넓게 검색하세요(국문/영문, 띄어쓰기 변형). 찾은 ID는 `get_api_spec`으로 필수 파라미터를 확인한 뒤 `call_api_raw`로 호출합니다.
 - 예시: “위원회 구성원” → `list_api_services("위원 명단")`에서 서비스 ID 확인 → `get_api_spec`으로 파라미터 확인 → `call_api_raw`로 명단 조회 → 필요 시 `get_member_info`로 개별 의원 상세를 보강.
 - 답변 시: 고수준 툴에 없으면 위 조합을 제안하거나 직접 호출해 결과를 만들어 주세요.

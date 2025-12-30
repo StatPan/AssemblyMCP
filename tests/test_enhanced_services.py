@@ -1,9 +1,11 @@
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
 from assemblymcp.services import BillService, CommitteeService, MeetingService, MemberService
 from assemblymcp.smart import SmartService
-from assemblymcp.models import Bill, Committee
+
 
 @pytest.fixture
 def mock_client():
@@ -50,7 +52,7 @@ async def test_search_bills_enhanced(bill_service, mock_client):
             ]}
         ]
     }
-    
+
     bills = await bill_service.get_bill_info(age="22", bill_name="테스트")
     assert len(bills) == 1
     assert bills[0].BILL_ID == "PRC_123"
@@ -96,7 +98,7 @@ async def test_smart_service_analyze(smart_service, mock_client):
             ]
         }
     ]
-    
+
     report = await smart_service.analyze_legislative_issue("AI")
     assert report["topic"] == "AI"
     assert len(report["recent_bills"]) > 0

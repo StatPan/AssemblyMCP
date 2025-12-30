@@ -116,9 +116,11 @@ async def get_assembly_info() -> str:
             "AssemblyMCP는 LLM의 사용 편의성을 극대화하는 지능형 기능을 제공합니다.\n\n"
             "👉 핵심 워크플로우:\n"
             "1) 종합 분석: analyze_legislative_issue('주제') -> 법안, 회의록, 의원 통합 리포트\n"
-            "2) 전문 데이터: get_legislative_reports('주제') -> NABO(예산정책처) 전문 분석 보고서 및 뉴스 링크 제공\n"
-            "3) 위원회 현황: get_committee_work_summary('위원회명') -> 해당 위원회의 계류 법안과 보고서 통합 뷰\n"
-            "4) 의안 탐색: search_bills() → get_bill_details() → get_bill_history() (타임라인/연혁)\n\n"
+            "2) 의원 분석: get_representative_report('의원명') -> 인적사항, 발의법안, 경력, 투표이력 종합 리포트\n"
+            "3) 투표 분석: get_bill_voting_results('의안ID') -> 본회의 표결 결과 및 정당별 찬반 경향\n"
+            "4) 전문 데이터: get_legislative_reports('주제') -> NABO(예산정책처) 전문 분석 보고서 및 뉴스 링크 제공\n"
+            "5) 위원회 현황: get_committee_work_summary('위원회명') -> 해당 위원회의 계류 법안과 보고서 통합 뷰\n"
+            "6) 의안 탐색: search_bills() → get_bill_details() → get_bill_history() (타임라인/연혁)\n\n"
             "👉 지능형 도구 (LLM을 위한 인프라):\n"
             "- get_api_code_guide: UNIT_CD(대수), PROC_STATUS(처리상태) 등 복잡한 코드값 사전 제공\n"
             "- 자동 보정: call_api_raw 호출 시 UNIT_CD='22' 등을 입력해도 서버가 자동으로 '100022'로 보정하여 호출합니다.\n"
@@ -432,6 +434,35 @@ async def get_committee_work_summary(committee_name: str) -> dict[str, Any]:
 
 
 @mcp.tool()
+async def analyze_committee_performance(committee_name: str) -> dict[str, Any]:
+    """
+    위원회 성과 및 협치 분석 리포트를 생성합니다.
+    가결된 법안의 찬성률을 통해 위원회의 협치 정도와 입법 효율성을 파악합니다.
+
+    Args:
+        committee_name: 위원회명 (예: "법제사법위원회", "기획재정위원회").
+    """
+    service = _require_service(smart_service)
+    report = await service.analyze_committee_performance(committee_name)
+    return report.model_dump(exclude_none=True)
+
+
+@mcp.tool()
+async def get_topic_political_consensus(topic: str, limit: int = 10) -> dict[str, Any]:
+    """
+    특정 입법 주제(이슈)에 대한 국회의 정당 간 합의 수준을 분석합니다.
+    관련 법안들의 본회의 찬성률을 집계하여 해당 주제가 얼마나 쟁점화되어 있는지 보여줍니다.
+
+    Args:
+        topic: 분석할 주제 또는 키워드 (예: "인공지능", "저출산", "종합부동산세").
+        limit: 분석할 최대 법안 수 (기본 10).
+    """
+    service = _require_service(smart_service)
+    report = await service.get_topic_political_consensus(topic, limit=limit)
+    return report.model_dump(exclude_none=True)
+
+
+@mcp.tool()
 async def get_api_code_guide() -> dict[str, Any]:
     """
     국회 API에서 공통으로 사용되는 코드값(대수, 처리상태 등) 가이드를 반환합니다.
@@ -566,7 +597,7 @@ async def get_committee_info(
         committees = await service.get_committee_list(committee_name)
         # If code was provided, filter strictly
         if committee_code:
-            committees = [c for c in committees if c.HR_DEPT_CD == committee_code]
+            committees = [c for c in committees if committee_code == c.HR_DEPT_CD]
 
         # Get members
         members = await service.get_committee_members(
@@ -584,6 +615,83 @@ async def get_committee_info(
     # Otherwise return the full list
     committees = await service.get_committee_list()
     return {"committees": [c.model_dump(exclude_none=True) for c in committees]}
+
+
+@mcp.tool()
+async def get_representative_report(member_name: str) -> dict[str, Any]:
+    """
+    특정 국회의원의 종합 의정활동 리포트를 생성합니다.
+    인적사항, 최근 대표 발의 법안, 위원회 경력, 최근 본회의 투표 이력을 한 번에 제공합니다.
+
+    Args:
+        member_name: 국회의원 성명 (예: "추경호").
+    """
+    service = _require_service(smart_service)
+    report = await service.get_representative_report(member_name)
+    return report.model_dump(exclude_none=True)
+
+
+@mcp.tool()
+async def get_bill_voting_results(bill_id: str) -> dict[str, Any]:
+    """
+    특정 의안에 대한 본회의 표결 결과(찬성, 반대, 기권 수)와 정당별 투표 경향을 조회합니다.
+
+    Args:
+        bill_id: 의안 ID (예: 'PRC_...').
+    """
+    service = _require_service(smart_service)
+    return await service.get_bill_voting_results(bill_id)
+
+
+@mcp.tool()
+async def analyze_voting_trends(topic: str) -> dict[str, Any]:
+    """
+    특정 주제(키워드)와 관련된 법안들의 본회의 투표 경향을 분석합니다.
+    최근 관련 법안들의 가결 여부와 찬반 통계를 요약하여 제공합니다.
+
+    Args:
+        topic: 분석할 주제 또는 키워드 (예: "종합부동산세", "간호법").
+    """
+    service = _require_service(smart_service)
+    return await service.analyze_voting_trends(topic)
+
+
+@mcp.tool()
+async def get_member_voting_history(
+    name: str | None = None,
+    bill_id: str | None = None,
+    age: str = "22",
+    page: int = 1,
+    limit: int = 20,
+) -> list[dict[str, Any]]:
+    """
+    국회의원 개인의 본회의 표결 기록 또는 특정 의안의 개별 의원 표결 현황을 조회합니다.
+
+    Args:
+        name: 의원 성명 (특정 의원의 이력을 볼 때 사용).
+        bill_id: 의안 ID (특정 의안에 누가 어떻게 투표했는지 볼 때 사용).
+        age: 국회 대수 (기본 "22").
+        page: 페이지 번호.
+        limit: 결과 수 (최대 100).
+    """
+    service = _require_service(bill_service)
+    records = await service.get_member_voting_history(
+        name=name, bill_id=bill_id, age=age, page=page, limit=limit
+    )
+    return [r.model_dump(exclude_none=True) for r in records]
+
+
+@mcp.tool()
+async def get_member_committee_careers(name: str) -> list[dict[str, Any]]:
+    """
+    특정 국회의원의 과거 및 현재 위원회 활동 경력을 조회합니다.
+
+    Args:
+        name: 의원 성명.
+    """
+    service = _require_service(member_service)
+    careers = await service.get_member_committee_careers(name)
+    return [c.model_dump(exclude_none=True) for c in careers]
 
 
 def main():
