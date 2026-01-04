@@ -19,8 +19,8 @@ async def test_topic_consensus():
     topic = "응급의료"
     print(f"--- Analyzing political consensus for topic: {topic} ---")
     try:
-        report = await smart_service.get_topic_political_consensus(topic, limit=5)
-        print(json.dumps(report.model_dump(), indent=2, ensure_ascii=False))
+        report = await smart_service.analyze_voting_trends(topic)
+        print(json.dumps(report, indent=2, ensure_ascii=False))
     except Exception as e:
         import traceback
         traceback.print_exc()

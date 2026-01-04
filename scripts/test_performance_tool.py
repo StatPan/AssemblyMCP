@@ -18,7 +18,7 @@ async def test_performance():
     committee = "법제사법위원회"
     print(f"--- Analyzing performance for {committee} ---")
     try:
-        report = await smart_service.analyze_committee_performance(committee)
+        report = await smart_service.get_committee_voting_stats(committee)
         print(json.dumps(report.model_dump(), indent=2, ensure_ascii=False))
     except Exception as e:
         print(f"Error: {e}")

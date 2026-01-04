@@ -79,32 +79,33 @@ class SmartService:
                         link=item.get("LINK_URL"),
                         report_type="분석보고서"
                     ) for item in rows
-                ] if rows else []
-            except Exception:
-                return []
-
-        async def fetch_news():
-            try:
-                raw_data = await self.bill_service.client.get_data(
-                    "O5MSQF0009823A15643",
-                    params={"V_TITLE": keyword, "pSize": limit}
-                )
-                if isinstance(raw_data, str):
-                    raw_data = json.loads(raw_data)
-
-                rows = _collect_rows(raw_data)
-                return [
-                    LegislativeReport(
-                        source="국회뉴스ON",
-                        title=item.get("V_TITLE", ""),
-                        date=item.get("DATE_RELEASED", "")[:10] if item.get("DATE_RELEASED") else None,
-                        link=item.get("URL_LINK"),
-                        report_type="뉴스/브리핑"
-                    ) for item in rows
-                ] if rows else []
-            except Exception:
-                return []
-
+                                ] if rows else []
+                            except Exception as e:
+                                logger.warning(f"NABO 보고서 조회 중 오류 발생 (키워드: '{keyword}'): {e}")
+                                return []
+                
+                        async def fetch_news():
+                            try:
+                                raw_data = await self.bill_service.client.get_data(
+                                    "O5MSQF0009823A15643",
+                                    params={"V_TITLE": keyword, "pSize": limit}
+                                )
+                                if isinstance(raw_data, str):
+                                    raw_data = json.loads(raw_data)
+                                
+                                rows = _collect_rows(raw_data)
+                                return [
+                                    LegislativeReport(
+                                        source="국회뉴스ON",
+                                        title=item.get("V_TITLE", ""),
+                                        date=item.get("DATE_RELEASED", "")[:10] if item.get("DATE_RELEASED") else None,
+                                        link=item.get("URL_LINK"),
+                                        report_type="뉴스/브리핑"
+                                    ) for item in rows
+                                ] if rows else []
+                            except Exception as e:
+                                logger.warning(f"국회뉴스ON 조회 중 오류 발생 (키워드: '{keyword}'): {e}")
+                                return []
         results = await asyncio.gather(fetch_nabo(), fetch_news())
         for res_list in results:
             reports.extend(res_list)
@@ -328,7 +329,7 @@ class SmartService:
                 party_stats[p]["찬성"] += 1
             elif "반대" in r.RESULT_VOTE_MOD:
                 party_stats[p]["반대"] += 1
-            else:
+            elif "기권" in r.RESULT_VOTE_MOD:
                 party_stats[p]["기권"] += 1
         return {"voting_summary": summary.model_dump(exclude_none=True), "party_trend_sample": party_stats}
 

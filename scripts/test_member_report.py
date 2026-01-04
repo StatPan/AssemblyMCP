@@ -20,9 +20,9 @@ async def test_member_report():
     try:
         report = await smart_service.get_representative_report(member_name)
         # 통계 요약과 전문 분야(경력 분석)가 잘 나오는지 확인
-        print(f"Expertise: {report.summary_stats.get('expertise_areas')}")
-        print(f"Bills Count: {report.summary_stats.get('total_bills_proposed_22nd')}")
-        print(f"Recent Votes Tracked: {len(report.recent_votes)}")
+        print(f"Expertise: {report.summary_stats.get('expertise')}")
+        print(f"Bills Count: {report.summary_stats.get('total_bills_22nd')}")
+        print(f"Recent Votes Tracked: {report.summary_stats.get('votes_tracked')}")
 
         # 전체 데이터 구조 확인 (일부)
         output = report.model_dump(exclude_none=True)
