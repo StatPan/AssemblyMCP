@@ -1,4 +1,3 @@
-
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -14,40 +13,47 @@ def mock_client():
     client.get = AsyncMock()
     return client
 
+
 @pytest.fixture
 def bill_service(mock_client):
     service = BillService(mock_client)
     service.client = mock_client
     return service
 
+
 @pytest.fixture
 def meeting_service(mock_client):
     return MeetingService(mock_client)
+
 
 @pytest.fixture
 def member_service(mock_client):
     return MemberService(mock_client)
 
+
 @pytest.fixture
 def smart_service(bill_service, meeting_service, member_service):
     return SmartService(bill_service, meeting_service, member_service)
+
 
 @pytest.mark.asyncio
 async def test_get_bill_voting_summary(bill_service, mock_client):
     mock_client.get_data.return_value = {
         "OND1KZ0009677M13515": [
             {"head": []},
-            {"row": [
-                {
-                    "BILL_ID": "PRC_V1",
-                    "BILL_NAME": "테스트 법안",
-                    "YES_TCNT": "150",
-                    "NO_TCNT": "50",
-                    "BLANK_TCNT": "10",
-                    "VOTE_TCNT": "210",
-                    "PROC_RESULT_CD": "가결"
-                }
-            ]}
+            {
+                "row": [
+                    {
+                        "BILL_ID": "PRC_V1",
+                        "BILL_NAME": "테스트 법안",
+                        "YES_TCNT": "150",
+                        "NO_TCNT": "50",
+                        "BLANK_TCNT": "10",
+                        "VOTE_TCNT": "210",
+                        "PROC_RESULT_CD": "가결",
+                    }
+                ]
+            },
         ]
     }
 
@@ -57,20 +63,23 @@ async def test_get_bill_voting_summary(bill_service, mock_client):
     assert summary.YES_TCNT == 150
     assert summary.PROC_RESULT_CD == "가결"
 
+
 @pytest.mark.asyncio
 async def test_get_member_voting_history(bill_service, mock_client):
     mock_client.get_data.return_value = {
         "OPR1MQ000998LC12535": [
             {"head": []},
-            {"row": [
-                {
-                    "BILL_ID": "PRC_V1",
-                    "BILL_NAME": "테스트 법안",
-                    "HG_NM": "홍길동",
-                    "RESULT_VOTE_MOD": "찬성",
-                    "POLY_NM": "가나다당"
-                }
-            ]}
+            {
+                "row": [
+                    {
+                        "BILL_ID": "PRC_V1",
+                        "BILL_NAME": "테스트 법안",
+                        "HG_NM": "홍길동",
+                        "RESULT_VOTE_MOD": "찬성",
+                        "POLY_NM": "가나다당",
+                    }
+                ]
+            },
         ]
     }
 
@@ -79,6 +88,7 @@ async def test_get_member_voting_history(bill_service, mock_client):
     assert len(records) == 1
     assert records[0].HG_NM == "홍길동"
     assert records[0].RESULT_VOTE_MOD == "찬성"
+
 
 @pytest.mark.asyncio
 async def test_get_representative_report(smart_service, mock_client):
@@ -92,11 +102,29 @@ async def test_get_representative_report(smart_service, mock_client):
         # get_member_info (OWSSC6001134T516707)
         {"OWSSC6001134T516707": [{"row": [{"HG_NM": "홍길동", "POLY_NM": "가나다당"}]}]},
         # get_bill_info (O4K6HM0012064I15889)
-        {"O4K6HM0012064I15889": [{"row": [{"BILL_ID": "B1", "BILL_NAME": "법안1", "PROPOSER": "홍길동", "PROPOSER_KIND": "의원", "PROC_STATUS": "접수"}]}]},
+        {
+            "O4K6HM0012064I15889": [
+                {
+                    "row": [
+                        {
+                            "BILL_ID": "B1",
+                            "BILL_NAME": "법안1",
+                            "PROPOSER": "홍길동",
+                            "PROPOSER_KIND": "의원",
+                            "PROC_STATUS": "접수",
+                        }
+                    ]
+                }
+            ]
+        },
         # get_member_committee_careers (ORNDP7000993P115502)
         {"ORNDP7000993P115502": [{"row": [{"HG_NM": "홍길동", "PROFILE_SJ": "법사위 위원"}]}]},
         # get_member_voting_history (OPR1MQ000998LC12535)
-        {"OPR1MQ000998LC12535": [{"row": [{"BILL_ID": "V1", "BILL_NAME": "법안1", "RESULT_VOTE_MOD": "찬성", "HG_NM": "홍길동"}]}]}
+        {
+            "OPR1MQ000998LC12535": [
+                {"row": [{"BILL_ID": "V1", "BILL_NAME": "법안1", "RESULT_VOTE_MOD": "찬성", "HG_NM": "홍길동"}]}
+            ]
+        },
     ]
 
     report = await smart_service.get_representative_report("홍길동")
@@ -106,16 +134,35 @@ async def test_get_representative_report(smart_service, mock_client):
     assert len(report.committee_careers) == 1
     assert report.summary_stats["total_bills_22nd"] == 1
 
+
 @pytest.mark.asyncio
 async def test_get_bill_voting_results(smart_service, mock_client):
     mock_client.get_data.side_effect = [
         # get_bill_voting_summary
         {"OND1KZ0009677M13515": [{"row": [{"BILL_ID": "V1", "BILL_NAME": "법안1", "YES_TCNT": "100"}]}]},
         # get_member_voting_history (sample)
-        {"OPR1MQ000998LC12535": [{"row": [
-            {"BILL_ID": "V1", "BILL_NAME": "법안1", "RESULT_VOTE_MOD": "찬성", "POLY_NM": "A당", "HG_NM": "의원1"},
-            {"BILL_ID": "V1", "BILL_NAME": "법안1", "RESULT_VOTE_MOD": "반대", "POLY_NM": "B당", "HG_NM": "의원2"}
-        ]}]}
+        {
+            "OPR1MQ000998LC12535": [
+                {
+                    "row": [
+                        {
+                            "BILL_ID": "V1",
+                            "BILL_NAME": "법안1",
+                            "RESULT_VOTE_MOD": "찬성",
+                            "POLY_NM": "A당",
+                            "HG_NM": "의원1",
+                        },
+                        {
+                            "BILL_ID": "V1",
+                            "BILL_NAME": "법안1",
+                            "RESULT_VOTE_MOD": "반대",
+                            "POLY_NM": "B당",
+                            "HG_NM": "의원2",
+                        },
+                    ]
+                }
+            ]
+        },
     ]
 
     results = await smart_service.get_bill_voting_results("V1")

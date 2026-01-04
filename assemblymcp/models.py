@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field
 
 class Bill(BaseModel):
     """국회의안 정보 데이터 모델."""
+
     BILL_ID: str = Field(..., description="의안ID")
     BILL_NO: str | None = Field(None, description="의안번호")
     BILL_NAME: str = Field(..., description="의안명")
@@ -20,12 +21,14 @@ class Bill(BaseModel):
 
 class BillDetail(Bill):
     """법률안 상세 정보."""
+
     MAJOR_CONTENT: str | None = Field(None, description="주요내용 요약")
     PROPOSE_REASON: str | None = Field(None, description="제안이유")
 
 
 class Committee(BaseModel):
     """국회 위원회 정보."""
+
     HR_DEPT_CD: str = Field(..., description="위원회 코드")
     COMMITTEE_NAME: str = Field(..., description="위원회명")
     CMT_DIV_NM: str | None = Field(None, description="위원회 구분")
@@ -36,6 +39,7 @@ class Committee(BaseModel):
 
 class LegislativeReport(BaseModel):
     """국회 전문 보고서 및 뉴스 데이터."""
+
     source: str = Field(..., description="출처")
     title: str = Field(..., description="제목")
     date: str | None = Field(None, description="등록 일자")
@@ -45,6 +49,7 @@ class LegislativeReport(BaseModel):
 
 class CommitteeWorkSummary(BaseModel):
     """위원회 활동 현황 집계 데이터."""
+
     committee_name: str = Field(..., description="위원회명")
     pending_bills_sample: list[Bill] = Field(default_factory=list, description="계류 중인 주요 의안")
     related_reports: list[LegislativeReport] = Field(default_factory=list, description="관련 보고서 및 뉴스")
@@ -52,6 +57,7 @@ class CommitteeWorkSummary(BaseModel):
 
 class CommitteeVotingStats(BaseModel):
     """위원회별 투표 수치 집계."""
+
     committee_name: str = Field(..., description="위원회명")
     assembly_age: str = Field(..., description="분석 대상 국회 대수")
     avg_yes_rate: float = Field(..., description="가결 법안 평균 찬성률")
@@ -61,6 +67,7 @@ class CommitteeVotingStats(BaseModel):
 
 class TopicVotingStats(BaseModel):
     """주제별 투표 수치 집계."""
+
     keyword: str = Field(..., description="검색 키워드")
     assembly_age: str = Field(..., description="국회 대수")
     avg_yes_rate: float = Field(..., description="평균 찬성률")
@@ -70,6 +77,7 @@ class TopicVotingStats(BaseModel):
 
 class VoteRecord(BaseModel):
     """개별 의원 표결 기록."""
+
     BILL_ID: str = Field(..., description="의안 고유 식별자")
     BILL_NAME: str = Field(..., description="의안명")
     VOTE_DATE: str | None = Field(None, description="의결일자")
@@ -80,6 +88,7 @@ class VoteRecord(BaseModel):
 
 class BillVotingSummary(BaseModel):
     """의안별 본회의 표결 통계 요약."""
+
     BILL_ID: str = Field(..., description="의안ID")
     BILL_NAME: str = Field(..., description="의안명")
     PROC_DT: str | None = Field(None, description="처리 일자")
@@ -93,6 +102,7 @@ class BillVotingSummary(BaseModel):
 
 class MemberCommitteeCareer(BaseModel):
     """의원 위원회 활동 경력."""
+
     HG_NM: str = Field(..., description="의원 성명")
     PROFILE_SJ: str = Field(..., description="경력 명칭")
     FRTO_DATE: str | None = Field(None, description="활동 기간")
@@ -101,6 +111,7 @@ class MemberCommitteeCareer(BaseModel):
 
 class MemberActivityReport(BaseModel):
     """의원 종합 활동 집계 데이터."""
+
     member_name: str = Field(..., description="의원 성명")
     basic_info: dict = Field(..., description="기본 인적사항")
     recent_bills: list[Bill] = Field(default_factory=list, description="최근 대표 발의 법안")

@@ -1,4 +1,3 @@
-
 LEGISLATIVE_GLOSSARY = """
 # 대한민국 국회 입법 용어 사전
 

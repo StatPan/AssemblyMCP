@@ -27,11 +27,13 @@ async def test_member_report():
         # 전체 데이터 구조 확인 (일부)
         output = report.model_dump(exclude_none=True)
         print("\n--- Report Sample (Summary Stats) ---")
-        print(json.dumps(output['summary_stats'], indent=2, ensure_ascii=False))
+        print(json.dumps(output["summary_stats"], indent=2, ensure_ascii=False))
     except Exception as e:
         import traceback
+
         traceback.print_exc()
         print(f"Error: {e}")
+
 
 if __name__ == "__main__":
     asyncio.run(test_member_report())

@@ -23,8 +23,10 @@ async def test_topic_consensus():
         print(json.dumps(report, indent=2, ensure_ascii=False))
     except Exception as e:
         import traceback
+
         traceback.print_exc()
         print(f"Error: {e}")
+
 
 if __name__ == "__main__":
     asyncio.run(test_topic_consensus())

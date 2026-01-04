@@ -39,6 +39,7 @@ COMMITTEE_ALIASES = {
     "예결위": "예산결산특별위원회",
 }
 
+
 class SmartService:
     def __init__(
         self,
@@ -64,53 +65,62 @@ class SmartService:
         async def fetch_nabo():
             try:
                 raw_data = await self.bill_service.client.get_data(
-                    "OB5IBW001180FQ10640",
-                    params={"SUBJECT": keyword, "pSize": limit}
+                    "OB5IBW001180FQ10640", params={"SUBJECT": keyword, "pSize": limit}
                 )
                 if isinstance(raw_data, str):
                     raw_data = json.loads(raw_data)
 
                 rows = _collect_rows(raw_data)
-                return [
-                    LegislativeReport(
-                        source="국회예산정책처 (NABO)",
-                        title=item.get("SUBJECT", ""),
-                        date=item.get("REG_DATE", "")[:10] if item.get("REG_DATE") else None,
-                        link=item.get("LINK_URL"),
-                        report_type="분석보고서"
-                    ) for item in rows
-                                ] if rows else []
-                            except Exception as e:
-                                logger.warning(f"NABO 보고서 조회 중 오류 발생 (키워드: '{keyword}'): {e}")
-                                return []
-                
-                        async def fetch_news():
-                            try:
-                                raw_data = await self.bill_service.client.get_data(
-                                    "O5MSQF0009823A15643",
-                                    params={"V_TITLE": keyword, "pSize": limit}
-                                )
-                                if isinstance(raw_data, str):
-                                    raw_data = json.loads(raw_data)
-                                
-                                rows = _collect_rows(raw_data)
-                                return [
-                                    LegislativeReport(
-                                        source="국회뉴스ON",
-                                        title=item.get("V_TITLE", ""),
-                                        date=item.get("DATE_RELEASED", "")[:10] if item.get("DATE_RELEASED") else None,
-                                        link=item.get("URL_LINK"),
-                                        report_type="뉴스/브리핑"
-                                    ) for item in rows
-                                ] if rows else []
-                            except Exception as e:
-                                logger.warning(f"국회뉴스ON 조회 중 오류 발생 (키워드: '{keyword}'): {e}")
-                                return []
+                return (
+                    [
+                        LegislativeReport(
+                            source="국회예산정책처 (NABO)",
+                            title=item.get("SUBJECT", ""),
+                            date=item.get("REG_DATE", "")[:10] if item.get("REG_DATE") else None,
+                            link=item.get("LINK_URL"),
+                            report_type="분석보고서",
+                        )
+                        for item in rows
+                    ]
+                    if rows
+                    else []
+                )
+            except Exception as e:
+                logger.warning(f"NABO 보고서 조회 중 오류 발생 (키워드: '{keyword}'): {e}")
+                return []
+
+        async def fetch_news():
+            try:
+                raw_data = await self.bill_service.client.get_data(
+                    "O5MSQF0009823A15643", params={"V_TITLE": keyword, "pSize": limit}
+                )
+                if isinstance(raw_data, str):
+                    raw_data = json.loads(raw_data)
+
+                rows = _collect_rows(raw_data)
+                return (
+                    [
+                        LegislativeReport(
+                            source="국회뉴스ON",
+                            title=item.get("V_TITLE", ""),
+                            date=item.get("DATE_RELEASED", "")[:10] if item.get("DATE_RELEASED") else None,
+                            link=item.get("URL_LINK"),
+                            report_type="뉴스/브리핑",
+                        )
+                        for item in rows
+                    ]
+                    if rows
+                    else []
+                )
+            except Exception as e:
+                logger.warning(f"국회뉴스ON 조회 중 오류 발생 (키워드: '{keyword}'): {e}")
+                return []
+
         results = await asyncio.gather(fetch_nabo(), fetch_news())
         for res_list in results:
             reports.extend(res_list)
 
-        return reports[:limit * 2]
+        return reports[: limit * 2]
 
     async def get_committee_work_summary(self, committee_name: str) -> CommitteeWorkSummary:
         normalized_target = self._normalize_committee_name(committee_name)
@@ -120,14 +130,11 @@ class SmartService:
         bills, reports = await asyncio.gather(bills_task, reports_task)
 
         relevant_bills = [
-            b for b in bills
-            if normalized_target in self._normalize_committee_name(b.CURR_COMMITTEE or "")
+            b for b in bills if normalized_target in self._normalize_committee_name(b.CURR_COMMITTEE or "")
         ]
 
         return CommitteeWorkSummary(
-            committee_name=normalized_target,
-            pending_bills_sample=relevant_bills[:5],
-            related_reports=reports
+            committee_name=normalized_target, pending_bills_sample=relevant_bills[:5], related_reports=reports
         )
 
     async def get_committee_voting_stats(self, committee_name: str) -> CommitteeVotingStats:
@@ -140,7 +147,8 @@ class SmartService:
             target_age = age
             bills = await self.bill_service.get_bill_info(age=age, limit=500)
             relevant_bills = [
-                b for b in bills
+                b
+                for b in bills
                 if (normalized_name in (b.CURR_COMMITTEE or "") or chair_name in (b.CURR_COMMITTEE or ""))
                 and ("가결" in (b.PROC_STATUS or ""))
                 and ("폐기" not in (b.PROC_STATUS or ""))
@@ -158,12 +166,14 @@ class SmartService:
                 yes_rate = (summary.YES_TCNT / summary.VOTE_TCNT) * 100
                 total_yes_rate += yes_rate
                 valid_vote_count += 1
-                passed_analysis.append({
-                    "BILL_NAME": bill.BILL_NAME,
-                    "YES_RATE": round(yes_rate, 2),
-                    "VOTE_DATE": summary.PROC_DT,
-                    "TOTAL_VOTES": summary.VOTE_TCNT
-                })
+                passed_analysis.append(
+                    {
+                        "BILL_NAME": bill.BILL_NAME,
+                        "YES_RATE": round(yes_rate, 2),
+                        "VOTE_DATE": summary.PROC_DT,
+                        "TOTAL_VOTES": summary.VOTE_TCNT,
+                    }
+                )
 
         avg_consensus = total_yes_rate / valid_vote_count if valid_vote_count > 0 else 0.0
 
@@ -172,7 +182,7 @@ class SmartService:
             assembly_age=target_age,
             avg_yes_rate=round(avg_consensus, 2),
             total_bills_analyzed=valid_vote_count,
-            bills_detail=passed_analysis
+            bills_detail=passed_analysis,
         )
 
     async def get_topic_voting_stats(self, keyword: str, limit: int = 10) -> TopicVotingStats:
@@ -182,8 +192,7 @@ class SmartService:
             target_age = age
             bills = await self.bill_service.get_bill_info(age=age, bill_name=keyword, limit=100)
             passed_bills = [
-                b for b in bills
-                if ("가결" in (b.PROC_STATUS or "")) and ("폐기" not in (b.PROC_STATUS or ""))
+                b for b in bills if ("가결" in (b.PROC_STATUS or "")) and ("폐기" not in (b.PROC_STATUS or ""))
             ]
             if passed_bills:
                 break
@@ -193,12 +202,14 @@ class SmartService:
             summary = await self.bill_service.get_bill_voting_summary(b.BILL_ID, age=target_age)
             if summary and summary.VOTE_TCNT and summary.VOTE_TCNT > 0:
                 yes_rate = (summary.YES_TCNT / summary.VOTE_TCNT) * 100
-                voting_results.append({
-                    "BILL_NAME": b.BILL_NAME,
-                    "YES_RATE": round(yes_rate, 2),
-                    "VOTE_DATE": summary.PROC_DT,
-                    "TOTAL_VOTES": summary.VOTE_TCNT
-                })
+                voting_results.append(
+                    {
+                        "BILL_NAME": b.BILL_NAME,
+                        "YES_RATE": round(yes_rate, 2),
+                        "VOTE_DATE": summary.PROC_DT,
+                        "TOTAL_VOTES": summary.VOTE_TCNT,
+                    }
+                )
 
         avg_score = sum(b["YES_RATE"] for b in voting_results) / len(voting_results) if voting_results else 0.0
 
@@ -207,7 +218,7 @@ class SmartService:
             assembly_age=target_age,
             avg_yes_rate=round(avg_score, 2),
             bill_count=len(voting_results),
-            individual_results=voting_results
+            individual_results=voting_results,
         )
 
     async def get_bill_history(self, bill_id: str) -> list[dict[str, Any]]:
@@ -234,11 +245,13 @@ class SmartService:
             m_date = m.get("CONF_DATE")
             if m_date and len(m_date) == 8:
                 m_date = f"{m_date[:4]}-{m_date[4:6]}-{m_date[6:]}"
-            history.append({
-                "date": m_date or "날짜 미상",
-                "event": "위원회 회의",
-                "note": f"{m.get('COMM_NAME', '')} {m.get('CONF_TITLE', '')}"
-            })
+            history.append(
+                {
+                    "date": m_date or "날짜 미상",
+                    "event": "위원회 회의",
+                    "note": f"{m.get('COMM_NAME', '')} {m.get('CONF_TITLE', '')}",
+                }
+            )
 
         history.sort(key=lambda x: x["date"] if x["date"] else "")
         return history
@@ -270,7 +283,7 @@ class SmartService:
             },
             "recent_bills": [b.model_dump(exclude_none=True) for b in bills],
             "relevant_meetings": meetings[:3] if meetings else [],
-            "key_politicians": proposers
+            "key_politicians": proposers,
         }
 
     async def get_representative_report(self, member_name: str) -> MemberActivityReport:
@@ -287,6 +300,7 @@ class SmartService:
             dates = c.FRTO_DATE.split("~")
             try:
                 from datetime import datetime
+
                 start_dt = datetime.strptime(dates[0].strip(), "%Y.%m.%d")
                 end_dt = (
                     datetime.strptime(dates[1].strip(), "%Y.%m.%d")
@@ -311,7 +325,7 @@ class SmartService:
             recent_bills=bills,
             committee_careers=careers,
             recent_votes=votes,
-            summary_stats=summary_stats
+            summary_stats=summary_stats,
         )
 
     async def get_bill_voting_results(self, bill_id: str) -> dict[str, Any]:

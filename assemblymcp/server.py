@@ -472,12 +472,8 @@ async def get_api_code_guide() -> dict[str, Any]:
     return {
         "UNIT_CD (국회 대수)": {
             "description": "국회 대수를 나타내는 6자리 코드",
-            "mapping": {
-                "22대": "100022",
-                "21대": "100021",
-                "20대": "100020"
-            },
-            "note": "AssemblyMCP가 '22' 같은 입력을 자동으로 '100022'로 보정해줍니다."
+            "mapping": {"22대": "100022", "21대": "100021", "20대": "100020"},
+            "note": "AssemblyMCP가 '22' 같은 입력을 자동으로 '100022'로 보정해줍니다.",
         },
         "PROC_RESULT_CD (의안 처리상태)": {
             "description": "의안의 현재 처리 단계 또는 결과 코드",
@@ -486,14 +482,14 @@ async def get_api_code_guide() -> dict[str, Any]:
                 "2000": "위원회 심사",
                 "3000": "본회의 심의",
                 "4000": "의결 (가결/수정가결 등)",
-                "5000": "폐기/철회"
-            }
+                "5000": "폐기/철회",
+            },
         },
         "Common_Parameters": {
             "pIndex": "페이지 번호 (기본: 1)",
             "pSize": "한 페이지당 결과 수 (기본: 10, 최대: 100)",
-            "Type": "응답 형식 (json 권장)"
-        }
+            "Type": "응답 형식 (json 권장)",
+        },
     }
 
 
@@ -676,9 +672,7 @@ async def get_member_voting_history(
         limit: 결과 수 (최대 100).
     """
     service = _require_service(bill_service)
-    records = await service.get_member_voting_history(
-        name=name, bill_id=bill_id, age=age, page=page, limit=limit
-    )
+    records = await service.get_member_voting_history(name=name, bill_id=bill_id, age=age, page=page, limit=limit)
     return [r.model_dump(exclude_none=True) for r in records]
 
 
