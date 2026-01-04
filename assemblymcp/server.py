@@ -123,7 +123,8 @@ async def get_assembly_info() -> str:
             "6) 의안 탐색: search_bills() → get_bill_details() → get_bill_history() (타임라인/연혁)\n\n"
             "👉 지능형 도구 (LLM을 위한 인프라):\n"
             "- get_api_code_guide: UNIT_CD(대수), PROC_STATUS(처리상태) 등 복잡한 코드값 사전 제공\n"
-            "- 자동 보정: call_api_raw 호출 시 UNIT_CD='22' 등을 입력해도 서버가 자동으로 '100022'로 보정하여 호출합니다.\n"
+            "- 자동 보정: call_api_raw 호출 시 UNIT_CD='22' 등을 입력해도 "
+            "서버가 자동으로 '100022'로 보정하여 호출합니다.\n"
             "- list_api_services → get_api_spec → call_api_raw 조합으로 어떤 정보든 조회 가능합니다.\n\n"
             "팁: 특정 주제에 맞는 서비스가 안 보이면 키워드를 바꿔 여러 번 검색하고, "
             "데이터가 부족하다고 섣불리 결론 내리지 마세요."
@@ -390,7 +391,7 @@ async def get_bill_history(bill_id: str) -> list[dict[str, Any]]:
 async def analyze_legislative_issue(topic: str, limit: int = 5) -> dict[str, Any]:
     """
     특정 주제(이슈)에 대한 종합적인 입법 현황 분석 리포트를 생성합니다.
-    이 도구는 관련 법안 검색, 주요 법안의 상세 내용, 관련 위원회 회의록, 
+    이 도구는 관련 법안 검색, 주요 법안의 상세 내용, 관련 위원회 회의록,
     그리고 해당 주제를 주도하는 주요 국회의원 정보를 한 번에 통합하여 제공합니다.
 
     Args:
@@ -423,7 +424,7 @@ async def get_legislative_reports(keyword: str, limit: int = 5) -> list[dict[str
 async def get_committee_work_summary(committee_name: str) -> dict[str, Any]:
     """
     특정 위원회의 현재 활동 현황(계류 의안, 관련 보고서 등)을 한 번에 조회합니다.
-    엔티티 간의 연관 데이터를 매핑하여 입체적인 정보를 제공합니다.
+    엔티티 간의 연관 데이터를 매핑하여 객관적인 정보를 제공합니다.
 
     Args:
         committee_name: 위원회명 (예: "법제사법위원회", "환경노동위원회").
@@ -434,32 +435,32 @@ async def get_committee_work_summary(committee_name: str) -> dict[str, Any]:
 
 
 @mcp.tool()
-async def analyze_committee_performance(committee_name: str) -> dict[str, Any]:
+async def get_committee_voting_stats(committee_name: str) -> dict[str, Any]:
     """
-    위원회 성과 및 협치 분석 리포트를 생성합니다.
-    가결된 법안의 찬성률을 통해 위원회의 협치 정도와 입법 효율성을 파악합니다.
+    특정 위원회가 처리한 가결 법안들의 본회의 찬성률 통계를 집계하여 반환합니다.
+    해당 위원회의 법안들이 본회의에서 어떤 수치로 통과되었는지 팩트 기반으로 제공합니다.
 
     Args:
         committee_name: 위원회명 (예: "법제사법위원회", "기획재정위원회").
     """
     service = _require_service(smart_service)
-    report = await service.analyze_committee_performance(committee_name)
-    return report.model_dump(exclude_none=True)
+    stats = await service.get_committee_voting_stats(committee_name)
+    return stats.model_dump(exclude_none=True)
 
 
 @mcp.tool()
-async def get_topic_political_consensus(topic: str, limit: int = 10) -> dict[str, Any]:
+async def get_topic_voting_stats(keyword: str, limit: int = 10) -> dict[str, Any]:
     """
-    특정 입법 주제(이슈)에 대한 국회의 정당 간 합의 수준을 분석합니다.
-    관련 법안들의 본회의 찬성률을 집계하여 해당 주제가 얼마나 쟁점화되어 있는지 보여줍니다.
+    특정 키워드가 포함된 법안들의 본회의 투표 찬성률 통계를 집계하여 반환합니다.
+    단순 키워드 매칭을 통해 검색된 법안들의 수치적 합계 데이터만 제공합니다.
 
     Args:
-        topic: 분석할 주제 또는 키워드 (예: "인공지능", "저출산", "종합부동산세").
-        limit: 분석할 최대 법안 수 (기본 10).
+        keyword: 검색 키워드 (예: "인공지능", "종합부동산세").
+        limit: 집계할 최대 법안 수 (기본 10).
     """
     service = _require_service(smart_service)
-    report = await service.get_topic_political_consensus(topic, limit=limit)
-    return report.model_dump(exclude_none=True)
+    stats = await service.get_topic_voting_stats(keyword, limit=limit)
+    return stats.model_dump(exclude_none=True)
 
 
 @mcp.tool()

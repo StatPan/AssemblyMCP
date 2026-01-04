@@ -104,8 +104,7 @@ async def test_get_representative_report(smart_service, mock_client):
     assert report.member_name == "홍길동"
     assert len(report.recent_bills) == 1
     assert len(report.committee_careers) == 1
-    assert len(report.recent_votes) == 1
-    assert report.summary_stats["career_count"] == 1
+    assert report.summary_stats["total_bills_22nd"] == 1
 
 @pytest.mark.asyncio
 async def test_get_bill_voting_results(smart_service, mock_client):

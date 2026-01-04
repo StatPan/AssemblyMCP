@@ -1,9 +1,12 @@
 import asyncio
 import json
+
+from assembly_client.api import AssemblyAPIClient
+
+from assemblymcp.config import settings
 from assemblymcp.services import BillService, MeetingService, MemberService
 from assemblymcp.smart import SmartService
-from assembly_client.api import AssemblyAPIClient
-from assemblymcp.config import settings
+
 
 async def test_performance():
     client = AssemblyAPIClient(api_key=settings.assembly_api_key)
@@ -11,7 +14,7 @@ async def test_performance():
     meeting_service = MeetingService(client)
     member_service = MemberService(client)
     smart_service = SmartService(bill_service, meeting_service, member_service)
-    
+
     committee = "법제사법위원회"
     print(f"--- Analyzing performance for {committee} ---")
     try:

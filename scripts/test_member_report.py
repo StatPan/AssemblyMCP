@@ -1,9 +1,12 @@
 import asyncio
 import json
+
+from assembly_client.api import AssemblyAPIClient
+
+from assemblymcp.config import settings
 from assemblymcp.services import BillService, MeetingService, MemberService
 from assemblymcp.smart import SmartService
-from assembly_client.api import AssemblyAPIClient
-from assemblymcp.config import settings
+
 
 async def test_member_report():
     client = AssemblyAPIClient(api_key=settings.assembly_api_key)
@@ -11,7 +14,7 @@ async def test_member_report():
     meeting_service = MeetingService(client)
     member_service = MemberService(client)
     smart_service = SmartService(bill_service, meeting_service, member_service)
-    
+
     member_name = "추경호"
     print(f"--- Generating representative report for: {member_name} ---")
     try:
@@ -20,7 +23,7 @@ async def test_member_report():
         print(f"Expertise: {report.summary_stats.get('expertise_areas')}")
         print(f"Bills Count: {report.summary_stats.get('total_bills_proposed_22nd')}")
         print(f"Recent Votes Tracked: {len(report.recent_votes)}")
-        
+
         # 전체 데이터 구조 확인 (일부)
         output = report.model_dump(exclude_none=True)
         print("\n--- Report Sample (Summary Stats) ---")

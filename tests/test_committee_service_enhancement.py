@@ -72,16 +72,16 @@ async def test_get_committee_members_info_200_with_suggestion(committee_service,
 
     mock_candidates = [
         Committee(
-            committee_code="12345",
-            committee_name="유사위원회A",
-            committee_div="상임",
-            chairperson="A",
+            HR_DEPT_CD="12345",
+            COMMITTEE_NAME="유사위원회A",
+            CMT_DIV_NM="상임",
+            HG_NM="A",
         ),
         Committee(
-            committee_code="67890",
-            committee_name="유사위원회B",
-            committee_div="상임",
-            chairperson="B",
+            HR_DEPT_CD="67890",
+            COMMITTEE_NAME="유사위원회B",
+            CMT_DIV_NM="상임",
+            HG_NM="B",
         ),
     ]
 

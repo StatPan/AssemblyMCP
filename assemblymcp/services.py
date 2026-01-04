@@ -1,6 +1,6 @@
+import contextlib
 import logging
 import re
-import contextlib
 from datetime import datetime
 from typing import Any
 
@@ -544,7 +544,7 @@ class BillService:
     ) -> list[VoteRecord]:
         """
         의원 개인의 표결 기록 또는 특정 의안의 개별 의원 표결 현황을 조회합니다.
-        국회 API 제약사항: BILL_ID가 필수인 경우가 많으므로, name만 있는 경우 
+        국회 API 제약사항: BILL_ID가 필수인 경우가 많으므로, name만 있는 경우
         최근 주요 의안들을 먼저 조회한 뒤 해당 의원의 투표 여부를 확인합니다.
         """
         # 1. 특정 의안의 전체 투표 결과 조회 (BILL_ID가 있는 경우)
@@ -557,7 +557,7 @@ class BillService:
             }
             if name:
                 params["HG_NM"] = name
-            
+
             raw_data = await self.client.get_data(service_id_or_name=self.VOTING_RECORD_ID, params=params)
             rows = _collect_rows(raw_data)
             return [self._build_vote_record(row) for row in rows]
@@ -568,14 +568,14 @@ class BillService:
             summary_params = {"AGE": age, "pSize": 50}
             summary_data = await self.client.get_data(service_id_or_name=self.VOTING_SUMMARY_ID, params=summary_params)
             summaries = _collect_rows(summary_data)
-            
+
             all_records = []
             # 병렬 처리를 통해 성능 최적화 시도 가능하나, 일단 순차 처리로 안정성 확인
             for s in summaries:
                 b_id = s.get("BILL_ID")
                 if not b_id:
                     continue
-                
+
                 # 각 의안에 대해 이 의원이 투표했는지 확인
                 v_params = {"BILL_ID": b_id, "AGE": self._normalize_age_for_api(age), "HG_NM": name}
                 try:
@@ -583,14 +583,14 @@ class BillService:
                     v_rows = _collect_rows(v_data)
                     for row in v_rows:
                         all_records.append(self._build_vote_record(row))
-                    
+
                     # 이미 충분한 기록을 찾았다면 중단
                     if len(all_records) >= limit:
                         break
                 except Exception:
                     # 특정 의안 조회 실패 시 건너뜀
                     continue
-            
+
             return all_records[:limit]
 
         return []
@@ -652,7 +652,7 @@ class MemberService:
         for row in rows:
             # 기간 추출 (예: "2024.06.10 ~ 2025.05.02")
             date_range = str(row.get("FRTO_DATE", ""))
-            
+
             careers.append(
                 MemberCommitteeCareer(
                     HG_NM=str(row.get("HG_NM", "")),
@@ -951,8 +951,8 @@ class CommitteeService:
                             candidates = await self.get_committee_list(committee_name=committee_name)
                             valid_candidates = []
                             for c in candidates:
-                                if c.committee_code and c.committee_code != "None":
-                                    valid_candidates.append(f"{c.committee_name}(코드: {c.committee_code})")
+                                if c.HR_DEPT_CD and c.HR_DEPT_CD != "None":
+                                    valid_candidates.append(f"{c.COMMITTEE_NAME}(코드: {c.HR_DEPT_CD})")
 
                             if valid_candidates:
                                 error_details["suggestion"] = (

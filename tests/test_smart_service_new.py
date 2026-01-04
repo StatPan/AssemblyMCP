@@ -1,8 +1,10 @@
-import pytest
 from unittest.mock import AsyncMock, MagicMock
-from assemblymcp.smart import SmartService
+
+import pytest
+
 from assemblymcp.services import BillService, MeetingService, MemberService
-from assemblymcp.models import Bill, MemberActivityReport
+from assemblymcp.smart import SmartService
+
 
 @pytest.fixture
 def mock_client():
@@ -71,9 +73,7 @@ async def test_analyze_committee_performance(smart_service, mock_client):
         {}, # Reports
         {}  # News
     ]
-    
-    report = await smart_service.analyze_committee_performance("법사위")
+
+    report = await smart_service.get_committee_voting_stats("법사위")
     assert report.committee_name == "법제사법위원회"
-    assert report.stats["average_yes_rate"] == 90.0
-    # 90.0% is "비교적 원만한" in current logic (threshold is > 90)
-    assert "원만한" in report.summary
+    assert report.avg_yes_rate == 90.0

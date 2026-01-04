@@ -7,12 +7,19 @@ on:
   workflow_dispatch:  # Allow manual trigger
 
 jobs:
-  sync-specs:
+  setup:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
+    outputs:
+      runner: ${{ steps.set-runner.outputs.runner }}
+    steps:
+      - name: Determine runner
+        id: set-runner
+        run: |
+          echo "runner=self-hosted" >> $GITHUB_OUTPUT
 
+  sync-specs:
+    needs: setup
+    runs-on: ${{ needs.setup.outputs.runner }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

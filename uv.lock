@@ -27,16 +27,21 @@ wheels = [
 
 [[package]]
 name = "assembly-api-client"
-version = "0.1.1"
-source = { git = "https://github.com/StatPan/assembly-api-client.git?rev=fa9aec96cbfc17c2146e127a900f220c4182bd14#fa9aec96cbfc17c2146e127a900f220c4182bd14" }
+version = "1.1.0"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
     { name = "openpyxl" },
     { name = "platformdirs" },
     { name = "pydantic" },
     { name = "python-dotenv" },
+    { name = "rich" },
     { name = "tenacity" },
     { name = "typer" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/20/b4/6380d7eed75e4b90154694ac5413416b3ce2177db2c88879c116a79282f5/assembly_api_client-1.1.0.tar.gz", hash = "sha256:a5381daccb3e3a11274f7326fba775321e82885ff9e89401678a46f6ebe09e14", size = 187458 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/de/0a/0ca3839647db0031b255dd4f1868a65583d54eb58c7de962dba82ac20644/assembly_api_client-1.1.0-py3-none-any.whl", hash = "sha256:b030189eb8db6cb3ec8e5272b3aba7a0f377542819da9cff132bdd22628b1ee9", size = 63795 },
 ]
 
 [[package]]
@@ -69,7 +74,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "assembly-api-client", git = "https://github.com/StatPan/assembly-api-client.git?rev=fa9aec96cbfc17c2146e127a900f220c4182bd14" },
+    { name = "assembly-api-client", specifier = ">=1.1.0" },
     { name = "beautifulsoup4", specifier = ">=4.14.2" },
     { name = "fastmcp", specifier = ">=2.13.1" },
     { name = "httpx", specifier = ">=0.28.1" },
