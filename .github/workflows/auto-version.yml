@@ -139,20 +139,28 @@ jobs:
           NEW_VERSION="${{ steps.bump_version.outputs.new_version }}"
           RAW_VERSION=${NEW_VERSION#v}
           
+          # Clean state and get latest
+          git reset --hard HEAD
+          git pull origin master --rebase
+          
           # Update file
           sed -i "s/^version = .*/version = \"$RAW_VERSION\"/" pyproject.toml
           
-          # Force pull to avoid conflicts before pushing
-          git pull origin master --rebase
-          
+          # Commit and push (idempotent: only if changes exist)
           git add pyproject.toml
-          git commit -m "chore: bump version to $NEW_VERSION [skip ci]" || echo "No changes to commit"
-          git push origin master
+          if git diff --staged --quiet; then
+            echo "No version change needed in pyproject.toml"
+          else
+            git commit -m "chore: bump version to $NEW_VERSION [skip ci]"
+            git push origin master
+          fi
           
-          # Create and push tag (idempotent check)
-          if ! git rev-parse "$NEW_VERSION" >/dev/null 2>&1; then
+          # Create and push tag (idempotent: only if tag doesn't exist)
+          if ! git ls-remote --tags origin | grep -q "refs/tags/$NEW_VERSION"; then
             git tag -a "$NEW_VERSION" -m "Release $NEW_VERSION"
             git push origin "$NEW_VERSION"
+          else
+            echo "Tag $NEW_VERSION already exists on remote."
           fi
 
       - name: Summary
