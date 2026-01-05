@@ -86,8 +86,9 @@ async def test_get_bill_details_numeric_id_bypass(mock_client):
     detail = await bill_service.get_bill_details(numeric_id)
 
     assert detail is not None
-    assert detail.bill_id == numeric_id
-    assert detail.summary == "Summary"
+    assert numeric_id == detail.BILL_ID
+    assert detail.MAJOR_CONTENT == "Summary"
+    assert detail.PROPOSE_REASON == "Reason"
 
     # Verify get_data called with BILL_NO
     mock_client.get_data.assert_called()

@@ -47,3 +47,6 @@ specs/api_specs/
 
 # Logs
 *.log
+
+# Local context and strategy
+context/

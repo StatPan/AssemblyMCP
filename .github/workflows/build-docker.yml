@@ -7,8 +7,19 @@ on:
     branches: [ "master" ]
 
 jobs:
-  build:
+  setup:
     runs-on: ubuntu-latest
+    outputs:
+      runner: ${{ steps.set-runner.outputs.runner }}
+    steps:
+      - name: Determine runner
+        id: set-runner
+        run: |
+          echo "runner=self-hosted" >> $GITHUB_OUTPUT
+
+  build:
+    needs: setup
+    runs-on: ${{ needs.setup.outputs.runner }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

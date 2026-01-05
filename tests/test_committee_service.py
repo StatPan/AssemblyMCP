@@ -51,10 +51,10 @@ async def test_get_committee_list(committee_service, mock_client):
 
     assert len(committees) == 2
     assert isinstance(committees[0], Committee)
-    assert committees[0].committee_code == "9700008"
-    assert committees[0].committee_name == "법제사법위원회"
-    assert committees[0].chairperson == "박광온"
-    assert committees[0].member_count == 18
+    assert committees[0].HR_DEPT_CD == "9700008"
+    assert committees[0].COMMITTEE_NAME == "법제사법위원회"
+    assert committees[0].HG_NM == "박광온"
+    assert committees[0].CURR_CNT == 18
 
     # Verify API call parameters
     mock_client.get_data.assert_called_once()

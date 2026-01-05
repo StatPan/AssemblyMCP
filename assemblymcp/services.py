@@ -1,3 +1,4 @@
+import contextlib
 import logging
 import re
 from datetime import datetime
@@ -7,7 +8,14 @@ from assembly_client.api import AssemblyAPIClient
 from assembly_client.errors import AssemblyAPIError, SpecParseError
 
 from assemblymcp.config import settings
-from assemblymcp.models import Bill, BillDetail, Committee
+from assemblymcp.models import (
+    Bill,
+    BillDetail,
+    BillVotingSummary,
+    Committee,
+    MemberCommitteeCareer,
+    VoteRecord,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +43,35 @@ def _collect_rows(raw_data: Any) -> list[dict[str, Any]]:
 class DiscoveryService:
     def __init__(self, client: AssemblyAPIClient):
         self.client = client
+
+    def _normalize_params(self, params: dict[str, Any]) -> dict[str, Any]:
+        """
+        국회 API 공통 파라미터 형식을 자동으로 보정합니다.
+        """
+        normalized = params.copy()
+
+        # 1. UNIT_CD 보정 (22 -> 100022)
+        if "UNIT_CD" in normalized:
+            val = str(normalized["UNIT_CD"])
+            digits = re.sub(r"[^0-9]", "", val)
+            if digits and len(digits) <= 2:
+                normalized["UNIT_CD"] = f"1000{digits.zfill(2)}"
+            elif digits and len(digits) == 6 and digits.startswith("1000"):
+                normalized["UNIT_CD"] = digits
+
+        # 2. AGE 보정 (100022 -> 22) - AGE는 보통 짧은 형식을 선호
+        if "AGE" in normalized:
+            val = str(normalized["AGE"])
+            if len(val) == 6 and val.startswith("1000"):
+                normalized["AGE"] = val[4:]
+
+        # 3. pIndex, pSize 타입 강제 (숫자형으로)
+        for num_param in ["pIndex", "pSize"]:
+            if num_param in normalized:
+                with contextlib.suppress(ValueError, TypeError):
+                    normalized[num_param] = int(normalized[num_param])
+
+        return normalized
 
     async def list_services(self, keyword: str = "") -> list[dict[str, str]]:
         """
@@ -75,8 +112,11 @@ class DiscoveryService:
         """
         Call a specific API service with raw parameters.
         """
+        # 파라미터 자동 보정 적용
+        normalized_params = self._normalize_params(params)
+
         try:
-            return await self.client.get_data(service_id_or_name=service_id_or_name, params=params)
+            return await self.client.get_data(service_id_or_name=service_id_or_name, params=normalized_params)
         except AssemblyAPIError as e:
             error_msg = str(e)
 
@@ -125,6 +165,8 @@ class BillService:
         self.client = client
         self.BILL_SEARCH_ID = "O4K6HM0012064I15889"
         self.BILL_DETAIL_ID = "OS46YD0012559515463"
+        self.VOTING_SUMMARY_ID = "OND1KZ0009677M13515"
+        self.VOTING_RECORD_ID = "OPR1MQ000998LC12535"
         self._proc_status_map = {
             "1000": "접수",
             "2000": "위원회 심사",
@@ -210,7 +252,6 @@ class BillService:
 
     def _build_bill(self, row: dict[str, Any]) -> Bill:
         proposer_raw = self._bill_field(row, ["PROPOSER", "PROPOSER_MAIN_NM", "RST_PROPOSER"])
-        proposer_text = proposer_raw or None
         primary_proposer, proposer_count = self._extract_proposer_info(proposer_raw or "")
 
         # Extract both BILL_ID and BILL_NO separately
@@ -222,20 +263,19 @@ class BillService:
             bill_id = bill_no
 
         return Bill(
-            bill_id=bill_id,
-            bill_no=bill_no or None,
-            bill_name=self._bill_field(row, ["BILL_NAME", "BILL_NM", "BILL_TITLE"]),
-            proposer=proposer_raw,
-            proposer_kind_name=self._bill_field(row, ["PROPOSER_KIND", "PROPOSER_KIND_NAME", "PROPOSER_GBN_NM"]),
-            proc_status=self._normalize_proc_status(row),
-            committee=self._bill_field(row, ["CURR_COMMITTEE", "CURR_COMMITTEE_NM", "CMIT_NM", "COMMITTEE"]),
-            propose_dt=self._parse_date(self._bill_field(row, ["PROPOSE_DT", "PROPOSE_DATE"])),
-            committee_dt=self._parse_date(self._bill_field(row, ["COMMITTEE_DT", "CMIT_DT"])),
-            proc_dt=self._parse_date(self._bill_field(row, ["PROC_DT"])),
-            link_url=self._bill_field(row, ["LINK_URL", "DETAIL_LINK"]),
-            proposer_text=proposer_text,
-            primary_proposer=primary_proposer,
-            proposer_count=proposer_count,
+            BILL_ID=bill_id,
+            BILL_NO=bill_no or None,
+            BILL_NAME=self._bill_field(row, ["BILL_NAME", "BILL_NM", "BILL_TITLE"]),
+            PROPOSER=proposer_raw,
+            PROPOSER_KIND_NM=self._bill_field(row, ["PROPOSER_KIND", "PROPOSER_KIND_NAME", "PROPOSER_GBN_NM"]),
+            PROC_STATUS=self._normalize_proc_status(row),
+            CURR_COMMITTEE=self._bill_field(row, ["CURR_COMMITTEE", "CURR_COMMITTEE_NM", "CMIT_NM", "COMMITTEE"]),
+            PROPOSE_DT=self._parse_date(self._bill_field(row, ["PROPOSE_DT", "PROPOSE_DATE"])),
+            COMMITTEE_DT=self._parse_date(self._bill_field(row, ["COMMITTEE_DT", "CMIT_DT"])),
+            PROC_DT=self._parse_date(self._bill_field(row, ["PROC_DT"])),
+            LINK_URL=self._bill_field(row, ["LINK_URL", "DETAIL_LINK"]),
+            PRIMARY_PROPOSER=primary_proposer,
+            PROPOSER_COUNT=proposer_count,
         )
 
     async def get_bill_info(
@@ -243,6 +283,7 @@ class BillService:
         age: str,  # REQUIRED by spec: 'AGE'
         bill_id: str | None = None,
         bill_name: str | None = None,
+        proposer: str | None = None,
         propose_dt: str | None = None,
         proc_status: str | None = None,
         page: int = 1,
@@ -256,6 +297,7 @@ class BillService:
             "AGE": age,  # REQUIRED
             "BILL_ID": bill_id,
             "BILL_NAME": bill_name,
+            "PROPOSER": proposer,
             "PROPOSE_DT": propose_dt,
             "PROC_RESULT_CD": proc_status,
             "pIndex": page,
@@ -301,7 +343,7 @@ class BillService:
         bills = await self.get_bill_info(age="22", page=page, limit=max(limit, 20))
 
         # Sort by proposal date descending (ISO format strings sort correctly)
-        bills.sort(key=lambda x: x.propose_dt if x.propose_dt else "", reverse=True)
+        bills.sort(key=lambda x: x.PROPOSE_DT if x.PROPOSE_DT else "", reverse=True)
 
         return bills[:limit]
 
@@ -346,14 +388,14 @@ class BillService:
             )
             # Create a minimal Bill object to hold the ID
             target_bill = Bill(
-                bill_id=bill_id,  # Use the numeric ID as ID for now
-                bill_no=bill_id,
-                bill_name="Unknown (Direct Fetch)",
-                proposer="Unknown",
-                proposer_kind_name="Unknown",
-                proc_status="Unknown",
-                committee="Unknown",
-                link_url="",
+                BILL_ID=bill_id,  # Use the numeric ID as ID for now
+                BILL_NO=bill_id,
+                BILL_NAME="Unknown (Direct Fetch)",
+                PROPOSER="Unknown",
+                PROPOSER_KIND_NM="Unknown",
+                PROC_STATUS="Unknown",
+                CURR_COMMITTEE="Unknown",
+                LINK_URL="",
             )
 
         if not target_bill:
@@ -370,7 +412,7 @@ class BillService:
 
         # Determine which identifier to use
         # Priority: use bill_no if available, otherwise try bill_id as fallback
-        bill_identifier = target_bill.bill_no if target_bill.bill_no else target_bill.bill_id
+        bill_identifier = target_bill.BILL_NO if target_bill.BILL_NO else target_bill.BILL_ID
 
         try:
             # Call detail API with the numeric BILL_NO
@@ -466,7 +508,112 @@ class BillService:
                 "이 문제가 지속되면 AssemblyMCP 이슈 트래커에 보고해주세요."
             )
 
-        return BillDetail(**target_bill.model_dump(), summary=summary, reason=reason)
+        return BillDetail(**target_bill.model_dump(), MAJOR_CONTENT=summary, PROPOSE_REASON=reason)
+
+    async def get_bill_voting_summary(self, bill_id: str, age: str = "22") -> BillVotingSummary | None:
+        """
+        특정 의안의 본회의 표결 통계(찬성/반대/기권 수)를 조회합니다.
+        """
+        params = {"BILL_ID": bill_id, "AGE": age}
+        raw_data = await self.client.get_data(service_id_or_name=self.VOTING_SUMMARY_ID, params=params)
+        rows = _collect_rows(raw_data)
+
+        if not rows:
+            return None
+
+        row = rows[0]
+        return BillVotingSummary(
+            BILL_ID=str(row.get("BILL_ID", "")),
+            BILL_NAME=str(row.get("BILL_NAME", "")),
+            PROC_DT=self._parse_date(row.get("PROC_DT")),
+            MEMBER_TCNT=int(row.get("MEMBER_TCNT")) if row.get("MEMBER_TCNT") else None,
+            VOTE_TCNT=int(row.get("VOTE_TCNT")) if row.get("VOTE_TCNT") else None,
+            YES_TCNT=int(row.get("YES_TCNT")) if row.get("YES_TCNT") else None,
+            NO_TCNT=int(row.get("NO_TCNT")) if row.get("NO_TCNT") else None,
+            BLANK_TCNT=int(row.get("BLANK_TCNT")) if row.get("BLANK_TCNT") else None,
+            PROC_RESULT_CD=str(row.get("PROC_RESULT_CD", "")),
+        )
+
+    async def get_member_voting_history(
+        self,
+        name: str | None = None,
+        bill_id: str | None = None,
+        age: str = "22",
+        page: int = 1,
+        limit: int = 20,
+    ) -> list[VoteRecord]:
+        """
+        의원 개인의 표결 기록 또는 특정 의안의 개별 의원 표결 현황을 조회합니다.
+        국회 API 제약사항: BILL_ID가 필수인 경우가 많으므로, name만 있는 경우
+        최근 주요 의안들을 먼저 조회한 뒤 해당 의원의 투표 여부를 확인합니다.
+        """
+        # 1. 특정 의안의 전체 투표 결과 조회 (BILL_ID가 있는 경우)
+        if bill_id:
+            params = {
+                "BILL_ID": bill_id,
+                "AGE": self._normalize_age_for_api(age),
+                "pIndex": page,
+                "pSize": limit,
+            }
+            if name:
+                params["HG_NM"] = name
+
+            raw_data = await self.client.get_data(service_id_or_name=self.VOTING_RECORD_ID, params=params)
+            rows = _collect_rows(raw_data)
+            return [self._build_vote_record(row) for row in rows]
+
+        # 2. 의원 성명만 있는 경우: 최근 가결된 주요 의안들에서 이 의원의 투표 기록을 찾음
+        if name:
+            # 검색 범위를 50개로 확대하여 매칭 확률을 높임
+            summary_params = {"AGE": age, "pSize": 50}
+            summary_data = await self.client.get_data(service_id_or_name=self.VOTING_SUMMARY_ID, params=summary_params)
+            summaries = _collect_rows(summary_data)
+
+            all_records = []
+            # 병렬 처리를 통해 성능 최적화 시도 가능하나, 일단 순차 처리로 안정성 확인
+            for s in summaries:
+                b_id = s.get("BILL_ID")
+                if not b_id:
+                    continue
+
+                # 각 의안에 대해 이 의원이 투표했는지 확인
+                v_params = {"BILL_ID": b_id, "AGE": self._normalize_age_for_api(age), "HG_NM": name}
+                try:
+                    v_data = await self.client.get_data(service_id_or_name=self.VOTING_RECORD_ID, params=v_params)
+                    v_rows = _collect_rows(v_data)
+                    for row in v_rows:
+                        all_records.append(self._build_vote_record(row))
+
+                    # 이미 충분한 기록을 찾았다면 중단
+                    if len(all_records) >= limit:
+                        break
+                except Exception:
+                    # 특정 의안 조회 실패 시 건너뜀
+                    continue
+
+            return all_records[:limit]
+
+        return []
+
+    def _normalize_age_for_api(self, age: str) -> str:
+        """대수 형식을 짧은 숫자 형식(예: '22')으로 보정합니다.
+        테스트 결과 표결 API는 100022 형식이 아닌 22 형식을 요구합니다.
+        """
+        clean = re.sub(r"[^0-9]", "", age)
+        if len(clean) == 6 and clean.startswith("1000"):
+            return clean[4:]
+        return clean
+
+    def _build_vote_record(self, row: dict[str, Any]) -> VoteRecord:
+        """Raw row 데이터를 VoteRecord 모델로 변환합니다."""
+        return VoteRecord(
+            BILL_ID=str(row.get("BILL_ID", "")),
+            BILL_NAME=str(row.get("BILL_NAME", "")),
+            VOTE_DATE=self._parse_date(row.get("VOTE_DATE")),
+            RESULT_VOTE_MOD=str(row.get("RESULT_VOTE_MOD", "")),
+            HG_NM=str(row.get("HG_NM", "")),
+            POLY_NM=str(row.get("POLY_NM", "")),
+        )
 
 
 class MemberService:
@@ -476,12 +623,13 @@ class MemberService:
         # This seems to be the correct one for searching by name.
         # Updated to new service ID "OWSSC6001134T516707" as per issue report (backdoor solution)
         self.MEMBER_INFO_ID = "OWSSC6001134T516707"
+        self.MEMBER_CAREER_ID = "ORNDP7000993P115502"
 
     async def get_member_info(self, name: str) -> list[dict[str, Any]]:
         """
         Search for member information by name.
         """
-        params = {"NAAS_NM": name}
+        params = {"HG_NM": name}
         raw_data = await self.client.get_data(service_id_or_name=self.MEMBER_INFO_ID, params=params)
         rows = _collect_rows(raw_data)
 
@@ -491,6 +639,29 @@ class MemberService:
         normalized = re.sub(r"\s+", "", name)
         filtered = [row for row in rows if normalized in re.sub(r"\s+", "", str(row.get("HG_NM", "")))]
         return filtered or rows
+
+    async def get_member_committee_careers(self, name: str) -> list[MemberCommitteeCareer]:
+        """
+        의원의 위원회 활동 경력을 조회하고 기간을 분석합니다.
+        """
+        params = {"HG_NM": name}
+        raw_data = await self.client.get_data(service_id_or_name=self.MEMBER_CAREER_ID, params=params)
+        rows = _collect_rows(raw_data)
+
+        careers = []
+        for row in rows:
+            # 기간 추출 (예: "2024.06.10 ~ 2025.05.02")
+            date_range = str(row.get("FRTO_DATE", ""))
+
+            careers.append(
+                MemberCommitteeCareer(
+                    HG_NM=str(row.get("HG_NM", "")),
+                    PROFILE_SJ=str(row.get("PROFILE_SJ", "")),
+                    FRTO_DATE=date_range,
+                    PROFILE_UNIT_NM=str(row.get("PROFILE_UNIT_NM", "")),
+                )
+            )
+        return careers
 
 
 class MeetingService:
@@ -709,12 +880,12 @@ class CommitteeService:
             try:
                 committees.append(
                     Committee(
-                        committee_code=str(row.get("HR_DEPT_CD", "")),
-                        committee_name=str(row.get("COMMITTEE_NAME", "")),
-                        committee_div=str(row.get("CMT_DIV_NM", "")),
-                        chairperson=row.get("HG_NM"),
-                        member_count=int(row.get("CURR_CNT")) if row.get("CURR_CNT") else None,
-                        limit_count=int(row.get("LIMIT_CNT")) if row.get("LIMIT_CNT") else None,
+                        HR_DEPT_CD=str(row.get("HR_DEPT_CD", "")),
+                        COMMITTEE_NAME=str(row.get("COMMITTEE_NAME", "")),
+                        CMT_DIV_NM=str(row.get("CMT_DIV_NM", "")),
+                        HG_NM=row.get("HG_NM"),
+                        CURR_CNT=int(row.get("CURR_CNT")) if row.get("CURR_CNT") else None,
+                        LIMIT_CNT=int(row.get("LIMIT_CNT")) if row.get("LIMIT_CNT") else None,
                     )
                 )
             except (ValueError, TypeError, KeyError) as e:
@@ -780,8 +951,8 @@ class CommitteeService:
                             candidates = await self.get_committee_list(committee_name=committee_name)
                             valid_candidates = []
                             for c in candidates:
-                                if c.committee_code and c.committee_code != "None":
-                                    valid_candidates.append(f"{c.committee_name}(코드: {c.committee_code})")
+                                if c.HR_DEPT_CD and c.HR_DEPT_CD != "None":
+                                    valid_candidates.append(f"{c.COMMITTEE_NAME}(코드: {c.HR_DEPT_CD})")
 
                             if valid_candidates:
                                 error_details["suggestion"] = (

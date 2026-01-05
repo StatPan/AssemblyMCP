@@ -6,10 +6,34 @@ on:
   pull_request:
     branches: [ master ]
   workflow_dispatch:
+    inputs:
+      runner:
+        description: 'Choose runner'
+        default: 'self-hosted'
+        type: choice
+        options:
+          - self-hosted
+          - ubuntu-latest
 
 jobs:
-  test:
+  setup:
     runs-on: ubuntu-latest
+    outputs:
+      runner: ${{ steps.set-runner.outputs.runner }}
+    steps:
+      - name: Determine runner
+        id: set-runner
+        run: |
+          # Use input runner if available, else default to self-hosted
+          SELECTED_RUNNER="${{ github.event.inputs.runner }}"
+          if [ -z "$SELECTED_RUNNER" ]; then
+            SELECTED_RUNNER="self-hosted"
+          fi
+          echo "runner=$SELECTED_RUNNER" >> $GITHUB_OUTPUT
+
+  test:
+    needs: setup
+    runs-on: ${{ needs.setup.outputs.runner }}
     strategy:
       matrix:
         python-version: ["3.12"]
