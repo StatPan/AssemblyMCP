@@ -116,7 +116,8 @@ class DiscoveryService:
         """
         results = []
 
-        search_keyword = re.sub(r"\s+", "", keyword).lower() if keyword else ""
+        # Split keyword into tokens for multi-word matching
+        search_tokens = keyword.lower().split() if keyword else []
 
         # Iterate through all service metadata
         for service_id, metadata in self.client.service_metadata.items():
@@ -125,16 +126,16 @@ class DiscoveryService:
             category = metadata.get("category", "")
 
             # Filter by keyword if provided
-            if search_keyword:
-                normalized_name = re.sub(r"\s+", "", name).lower()
-                normalized_desc = re.sub(r"\s+", "", description).lower()
+            if search_tokens:
+                target_text = f"{name} {description} {service_id}".lower()
 
-                if not (
-                    search_keyword in normalized_name
-                    or search_keyword in normalized_desc
-                    or search_keyword in service_id.lower()
-                ):
-                    continue
+                # All tokens must be present in the target text
+                if not all(token in target_text for token in search_tokens):
+                    # Also try space-stripped matching as a fallback
+                    stripped_target = re.sub(r"\s+", "", target_text)
+                    stripped_keyword = re.sub(r"\s+", "", keyword).lower()
+                    if stripped_keyword not in stripped_target:
+                        continue
 
             results.append(
                 {
