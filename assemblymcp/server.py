@@ -386,7 +386,7 @@ async def get_bill_details(bill_id: str, age: str | None = None) -> dict[str, An
 
 
 @mcp.tool()
-async def get_bill_history(bill_id: str) -> list[dict[str, Any]]:
+async def get_bill_history(bill_id: str) -> list[dict[str, Any]] | str:
     """
     특정 의안의 발의부터 현재까지의 모든 주요 이력(회의 포함)을 날짜순으로 통합하여 조회합니다.
     타임라인 생성이나 연혁 분석에 매우 유용합니다.
@@ -395,11 +395,14 @@ async def get_bill_history(bill_id: str) -> list[dict[str, Any]]:
         bill_id: 의안 ID (예: 'PRC_...') 또는 의안 번호 (예: '2200001').
     """
     service = _require_service(smart_service)
-    return await service.get_bill_history(bill_id)
+    history = await service.get_bill_history(bill_id)
+    if not history:
+        return f"의안 ID '{bill_id}'에 대한 이력 정보를 찾을 수 없습니다."
+    return history
 
 
 @mcp.tool()
-async def analyze_legislative_issue(topic: str, limit: int = 5) -> dict[str, Any]:
+async def analyze_legislative_issue(topic: str, limit: int = 5) -> dict[str, Any] | str:
     """
     특정 주제(이슈)에 대한 종합적인 입법 현황 분석 리포트를 생성합니다.
     이 도구는 관련 법안 검색, 주요 법안의 상세 내용, 관련 위원회 회의록,
@@ -413,11 +416,14 @@ async def analyze_legislative_issue(topic: str, limit: int = 5) -> dict[str, Any
         종합 분석 리포트 데이터.
     """
     service = _require_service(smart_service)
-    return await service.analyze_legislative_issue(topic, limit=limit)
+    result = await service.analyze_legislative_issue(topic, limit=limit)
+    if isinstance(result, dict) and result.get("message") == "데이터 없음":
+        return f"주제 '{topic}'에 대한 입법 현황 데이터를 찾을 수 없습니다."
+    return result
 
 
 @mcp.tool()
-async def get_legislative_reports(keyword: str, limit: int = 5) -> list[dict[str, Any]]:
+async def get_legislative_reports(keyword: str, limit: int = 5) -> list[dict[str, Any]] | str:
     """
     특정 주제나 법안과 관련된 국회 전문 보고서(NABO Focus 등) 및 뉴스를 조회합니다.
     단순 법안 정보를 넘어 전문가의 분석 시각을 제공할 때 유용합니다.
@@ -428,6 +434,8 @@ async def get_legislative_reports(keyword: str, limit: int = 5) -> list[dict[str
     """
     service = _require_service(smart_service)
     reports = await service.get_legislative_reports(keyword, limit=limit)
+    if not reports:
+        return f"키워드 '{keyword}'와 관련된 보고서나 뉴스를 찾을 수 없습니다."
     return [r.model_dump(exclude_none=True) for r in reports]
 
 
@@ -505,7 +513,7 @@ async def get_api_code_guide() -> dict[str, Any]:
 
 
 @mcp.tool()
-async def get_member_info(name: str) -> list[dict]:
+async def get_member_info(name: str) -> list[dict] | str:
     """
     국회의원 상세 정보를 검색합니다.
     발의자가 누구인지, 소속 정당, 지역구 등을 파악할 때 유용합니다.
@@ -517,7 +525,10 @@ async def get_member_info(name: str) -> list[dict]:
         국회의원 정보 목록.
     """
     service = _require_service(member_service)
-    return await service.get_member_info(name)
+    results = await service.get_member_info(name)
+    if not results:
+        return f"의원명 '{name}'에 대한 정보를 찾을 수 없습니다."
+    return results
 
 
 @mcp.tool()
@@ -593,7 +604,7 @@ async def get_committee_info(
     committee_code: str | None = None,
     page: int = 1,
     limit: int = 50,
-) -> dict[str, Any]:
+) -> dict[str, Any] | str:
     """
     위원회 목록을 조회하거나 특정 위원회의 상세 정보(위원 명단 포함)를 가져옵니다.
 
@@ -624,6 +635,15 @@ async def get_committee_info(
             limit=limit,
         )
 
+        if isinstance(members, dict) and "error" in members:
+            error_details = members.get("error", {})
+            if isinstance(error_details, dict):
+                return error_details.get("suggestion", "위원회 위원 명단 정보를 찾을 수 없습니다.")
+            return "위원회 위원 명단 정보를 찾을 수 없습니다."
+
+        if not committees and not members:
+            return f"위원회 '{committee_name or committee_code}'에 대한 정보를 찾을 수 없습니다."
+
         return {
             "committee": [c.model_dump(exclude_none=True) for c in committees],
             "members": members,
@@ -631,6 +651,8 @@ async def get_committee_info(
 
     # Otherwise return the full list
     committees = await service.get_committee_list()
+    if not committees:
+        return "위원회 목록을 가져올 수 없습니다."
     return {"committees": [c.model_dump(exclude_none=True) for c in committees]}
 
 
@@ -680,7 +702,7 @@ async def get_member_voting_history(
     age: str = "22",
     page: int = 1,
     limit: int = 20,
-) -> list[dict[str, Any]]:
+) -> list[dict[str, Any]] | str:
     """
     국회의원 개인의 본회의 표결 기록 또는 특정 의안의 개별 의원 표결 현황을 조회합니다.
 
@@ -691,13 +713,24 @@ async def get_member_voting_history(
         page: 페이지 번호.
         limit: 결과 수 (최대 100).
     """
+    if not name and not bill_id:
+        return "의원명(name) 또는 의안 ID(bill_id) 중 하나는 반드시 입력해야 합니다."
+
     service = _require_service(bill_service)
     records = await service.get_member_voting_history(name=name, bill_id=bill_id, age=age, page=page, limit=limit)
+    if not records:
+        if name and bill_id:
+            target = f"의원 '{name}'과(와) 의안 ID '{bill_id}'"
+        elif name:
+            target = f"의원 '{name}'"
+        else:
+            target = f"의안 ID '{bill_id}'"
+        return f"{target}에 대한 표결 기록을 찾을 수 없습니다."
     return [r.model_dump(exclude_none=True) for r in records]
 
 
 @mcp.tool()
-async def get_member_committee_careers(name: str) -> list[dict[str, Any]]:
+async def get_member_committee_careers(name: str) -> list[dict[str, Any]] | str:
     """
     특정 국회의원의 과거 및 현재 위원회 활동 경력을 조회합니다.
 
@@ -706,6 +739,8 @@ async def get_member_committee_careers(name: str) -> list[dict[str, Any]]:
     """
     service = _require_service(member_service)
     careers = await service.get_member_committee_careers(name)
+    if not careers:
+        return f"의원 '{name}'에 대한 위원회 활동 경력을 찾을 수 없습니다."
     return [c.model_dump(exclude_none=True) for c in careers]
 
 
