@@ -635,6 +635,12 @@ async def get_committee_info(
             limit=limit,
         )
 
+        if isinstance(members, dict) and "error" in members:
+            error_details = members.get("error", {})
+            if isinstance(error_details, dict):
+                return error_details.get("suggestion", "위원회 위원 명단 정보를 찾을 수 없습니다.")
+            return "위원회 위원 명단 정보를 찾을 수 없습니다."
+
         if not committees and not members:
             return f"위원회 '{committee_name or committee_code}'에 대한 정보를 찾을 수 없습니다."
 
@@ -707,10 +713,18 @@ async def get_member_voting_history(
         page: 페이지 번호.
         limit: 결과 수 (최대 100).
     """
+    if not name and not bill_id:
+        return "의원명(name) 또는 의안 ID(bill_id) 중 하나는 반드시 입력해야 합니다."
+
     service = _require_service(bill_service)
     records = await service.get_member_voting_history(name=name, bill_id=bill_id, age=age, page=page, limit=limit)
     if not records:
-        target = f"의원 '{name}'" if name else f"의안 ID '{bill_id}'"
+        if name and bill_id:
+            target = f"의원 '{name}'과(와) 의안 ID '{bill_id}'"
+        elif name:
+            target = f"의원 '{name}'"
+        else:
+            target = f"의안 ID '{bill_id}'"
         return f"{target}에 대한 표결 기록을 찾을 수 없습니다."
     return [r.model_dump(exclude_none=True) for r in records]
 
