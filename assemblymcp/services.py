@@ -116,27 +116,28 @@ class DiscoveryService:
         """
         results = []
 
-                # Split keyword into tokens for multi-word matching
-                search_tokens = keyword.lower().split() if keyword else []
-                stripped_keyword = re.sub(r"\s+", "", keyword).lower() if keyword else ""
-        
-                # Iterate through all service metadata
-                for service_id, metadata in self.client.service_metadata.items():
-                    name = metadata.get("name", "")
-                    description = metadata.get("description", "")
-                    category = metadata.get("category", "")
-        
-                    # Filter by keyword if provided
-                    if search_tokens:
-                        target_text = f"{name} {description} {service_id}".lower()
-                        
-                        # All tokens must be present in the target text
-                        if not all(token in target_text for token in search_tokens):
-                            # Also try space-stripped matching as a fallback
-                            stripped_target = re.sub(r"\s+", "", target_text)
-                            if stripped_keyword not in stripped_target:
-                                continue
-                    results.append(
+        # Split keyword into tokens for multi-word matching
+        search_tokens = keyword.lower().split() if keyword else []
+        stripped_keyword = re.sub(r"\s+", "", keyword).lower() if keyword else ""
+
+        # Iterate through all service metadata
+        for service_id, metadata in self.client.service_metadata.items():
+            name = metadata.get("name", "")
+            description = metadata.get("description", "")
+            category = metadata.get("category", "")
+
+            # Filter by keyword if provided
+            if search_tokens:
+                target_text = f"{name} {description} {service_id}".lower()
+
+                # All tokens must be present in the target text
+                if not all(token in target_text for token in search_tokens):
+                    # Also try space-stripped matching as a fallback
+                    stripped_target = re.sub(r"\s+", "", target_text)
+                    if stripped_keyword not in stripped_target:
+                        continue
+
+            results.append(
                 {
                     "id": service_id,
                     "name": name,
