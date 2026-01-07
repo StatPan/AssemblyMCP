@@ -236,7 +236,7 @@ async def get_api_spec(service_id: str) -> dict[str, Any]:
 
 
 @mcp.tool()
-async def list_api_services(keyword: str = "") -> list[dict[str, str]]:
+async def list_api_services(keyword: str = "") -> list[dict[str, str]] | str:
     """
     모든 OpenAPI(총 270여 개) 메타데이터를 검색합니다.
 
@@ -251,7 +251,10 @@ async def list_api_services(keyword: str = "") -> list[dict[str, str]]:
         List of services matching the keyword. Each item contains id, name, and description.
     """
     service = _require_service(discovery_service)
-    return await service.list_services(keyword)
+    results = await service.list_services(keyword)
+    if not results and keyword:
+        return f"키워드 '{keyword}'에 대한 검색 결과가 없습니다. 공백을 제거하거나 다른 핵심 키워드로 검색해보세요."
+    return results
 
 
 @mcp.tool()
@@ -305,7 +308,7 @@ async def search_bills(
     proc_status: str | None = None,
     page: int = 1,
     limit: int = 10,
-) -> list[dict[str, Any]]:
+) -> list[dict[str, Any]] | str:
     """
     의안을 검색하거나 목록을 조회합니다. (통합 검색 도구)
 
@@ -349,11 +352,17 @@ async def search_bills(
             limit=limit,
         )
 
+    if not bills:
+        msg = "검색 조건에 맞는 의안이 없습니다."
+        if keyword:
+            msg += f" (키워드: {keyword})"
+        return msg
+
     return [bill.model_dump(exclude_none=True) for bill in bills]
 
 
 @mcp.tool(output_schema=bill_detail_output_schema())
-async def get_bill_details(bill_id: str, age: str | None = None) -> dict[str, Any] | None:
+async def get_bill_details(bill_id: str, age: str | None = None) -> dict[str, Any] | str:
     """
     특정 의안의 상세 정보를 조회합니다.
     의안의 요약(MAJOR_CONTENT)과 제안 이유(PROPOSE_REASON)를 포함합니다.
@@ -371,7 +380,9 @@ async def get_bill_details(bill_id: str, age: str | None = None) -> dict[str, An
     """
     service = _require_service(bill_service)
     details = await service.get_bill_details(bill_id, age=age)
-    return details.model_dump(exclude_none=True) if details else None
+    if not details:
+        return f"의안 ID/번호 '{bill_id}'에 대한 상세 정보를 찾을 수 없습니다."
+    return details.model_dump(exclude_none=True)
 
 
 @mcp.tool()
@@ -517,7 +528,7 @@ async def search_meetings(
     date_end: str | None = None,
     page: int = 1,
     limit: int = 10,
-) -> list[dict[str, Any]]:
+) -> list[dict[str, Any]] | str:
     """
     위원회 회의 정보를 검색합니다.
 
@@ -535,15 +546,21 @@ async def search_meetings(
     service = _require_service(meeting_service)
 
     if bill_id:
-        return await service.get_meeting_records(bill_id)
+        records = await service.get_meeting_records(bill_id)
+        if not records:
+            return f"의안 ID '{bill_id}'와 관련된 회의 기록이 없습니다."
+        return records
 
-    return await service.search_meetings(
+    results = await service.search_meetings(
         committee_name=committee_name,
         date_start=date_start,
         date_end=date_end,
         page=page,
         limit=limit,
     )
+    if not results:
+        return "검색 조건에 맞는 회의 일정이 없습니다."
+    return results
 
 
 @mcp.tool()
@@ -551,7 +568,7 @@ async def get_plenary_schedule(
     unit_cd: str | None = None,
     page: int = 1,
     limit: int = 10,
-) -> list[dict[str, Any]]:
+) -> list[dict[str, Any]] | str:
     """
     본회의 일정을 조회합니다. (Service ID: ORDPSW001070QH19059)
 
@@ -564,7 +581,10 @@ async def get_plenary_schedule(
         limit: Max results (default 10).
     """
     service = _require_service(meeting_service)
-    return await service.get_plenary_schedule(unit_cd=unit_cd, page=page, limit=limit)
+    results = await service.get_plenary_schedule(unit_cd=unit_cd, page=page, limit=limit)
+    if not results:
+        return f"대수(unit_cd) '{unit_cd or '전체'}'에 대한 본회의 일정이 없습니다."
+    return results
 
 
 @mcp.tool()
