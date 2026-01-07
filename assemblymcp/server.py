@@ -308,7 +308,7 @@ async def search_bills(
     proc_status: str | None = None,
     page: int = 1,
     limit: int = 10,
-) -> list[dict[str, Any]]:
+) -> list[dict[str, Any]] | str:
     """
     의안을 검색하거나 목록을 조회합니다. (통합 검색 도구)
 
@@ -356,7 +356,7 @@ async def search_bills(
         msg = "검색 조건에 맞는 의안이 없습니다."
         if keyword:
             msg += f" (키워드: {keyword})"
-        return [{"message": msg}]
+        return msg
 
     return [bill.model_dump(exclude_none=True) for bill in bills]
 
