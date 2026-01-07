@@ -152,7 +152,8 @@ jobs:
                 \"repository\": \"${{ github.repository }}\",
                 \"sha\": \"${{ github.sha }}\",
                 \"ref\": \"${{ github.ref }}\",
-                \"actor\": \"${{ github.actor }}\"
+                \"actor\": \"${{ github.actor }}\",
+                \"env\": \"production\"
               }
             }"
           
