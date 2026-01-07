@@ -299,7 +299,7 @@ class SmartService:
         for c in careers:
             if not c.FRTO_DATE or "~" not in c.FRTO_DATE:
                 continue
-                
+
             dates = c.FRTO_DATE.split("~")
             try:
                 from datetime import datetime

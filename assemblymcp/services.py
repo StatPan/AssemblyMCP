@@ -4,8 +4,10 @@ import re
 from datetime import datetime
 from typing import Any
 
+import httpx
 from assembly_client.api import AssemblyAPIClient
 from assembly_client.errors import AssemblyAPIError, SpecParseError
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from assemblymcp.config import settings
 from assemblymcp.models import (
@@ -18,6 +20,47 @@ from assemblymcp.models import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def normalize_unit_cd(val: Any) -> str:
+    """Normalize UNIT_CD to 1000xx format."""
+    if val is None:
+        return ""
+    s_val = str(val)
+    digits = re.sub(r"[^0-9]", "", s_val)
+    if digits and len(digits) <= 2:
+        return f"1000{digits.zfill(2)}"
+    if digits and len(digits) == 6 and digits.startswith("1000"):
+        return digits
+    return s_val
+
+
+def normalize_age(val: Any) -> str:
+    """Normalize AGE to 2-digit format."""
+    if val is None:
+        return ""
+    s_val = str(val)
+    digits = re.sub(r"[^0-9]", "", s_val)
+    if len(digits) == 6 and digits.startswith("1000"):
+        return digits[4:]
+    return digits
+
+
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=1, max=10),
+    retry=retry_if_exception_type((AssemblyAPIError, httpx.RequestError)),
+    reraise=True,
+)
+async def _get_data_with_retry(client: AssemblyAPIClient, service_id: str, params: dict[str, Any]) -> dict[str, Any]:
+    """Fetch data from API with retry logic."""
+    try:
+        return await client.get_data(service_id_or_name=service_id, params=params)
+    except Exception as e:
+        # If it's already an AssemblyAPIError or httpx error, it will be retried
+        # We can log the attempt here if needed
+        logger.debug(f"API call attempt failed for {service_id}: {e}")
+        raise
 
 
 def _collect_rows(raw_data: Any) -> list[dict[str, Any]]:
@@ -50,20 +93,13 @@ class DiscoveryService:
         """
         normalized = params.copy()
 
-        # 1. UNIT_CD 보정 (22 -> 100022)
+        # 1. UNIT_CD 보정
         if "UNIT_CD" in normalized:
-            val = str(normalized["UNIT_CD"])
-            digits = re.sub(r"[^0-9]", "", val)
-            if digits and len(digits) <= 2:
-                normalized["UNIT_CD"] = f"1000{digits.zfill(2)}"
-            elif digits and len(digits) == 6 and digits.startswith("1000"):
-                normalized["UNIT_CD"] = digits
+            normalized["UNIT_CD"] = normalize_unit_cd(normalized["UNIT_CD"])
 
-        # 2. AGE 보정 (100022 -> 22) - AGE는 보통 짧은 형식을 선호
+        # 2. AGE 보정
         if "AGE" in normalized:
-            val = str(normalized["AGE"])
-            if len(val) == 6 and val.startswith("1000"):
-                normalized["AGE"] = val[4:]
+            normalized["AGE"] = normalize_age(normalized["AGE"])
 
         # 3. pIndex, pSize 타입 강제 (숫자형으로)
         for num_param in ["pIndex", "pSize"]:
@@ -76,8 +112,11 @@ class DiscoveryService:
     async def list_services(self, keyword: str = "") -> list[dict[str, str]]:
         """
         Search for available API services by keyword.
+        Improved to be flexible with spaces and case.
         """
         results = []
+
+        search_keyword = re.sub(r"\s+", "", keyword).lower() if keyword else ""
 
         # Iterate through all service metadata
         for service_id, metadata in self.client.service_metadata.items():
@@ -86,12 +125,14 @@ class DiscoveryService:
             category = metadata.get("category", "")
 
             # Filter by keyword if provided
-            if keyword:
-                keyword_lower = keyword.lower()
+            if search_keyword:
+                normalized_name = re.sub(r"\s+", "", name).lower()
+                normalized_desc = re.sub(r"\s+", "", description).lower()
+
                 if not (
-                    keyword_lower in name.lower()
-                    or keyword_lower in description.lower()
-                    or keyword_lower in service_id.lower()
+                    search_keyword in normalized_name
+                    or search_keyword in normalized_desc
+                    or search_keyword in service_id.lower()
                 ):
                     continue
 
@@ -116,7 +157,7 @@ class DiscoveryService:
         normalized_params = self._normalize_params(params)
 
         try:
-            return await self.client.get_data(service_id_or_name=service_id_or_name, params=normalized_params)
+            return await _get_data_with_retry(self.client, service_id_or_name, normalized_params)
         except AssemblyAPIError as e:
             error_msg = str(e)
 
@@ -294,7 +335,7 @@ class BillService:
         This function integrates multiple underlying Bill APIs.
         """
         params = {
-            "AGE": age,  # REQUIRED
+            "AGE": normalize_age(age),  # Normalized
             "BILL_ID": bill_id,
             "BILL_NAME": bill_name,
             "PROPOSER": proposer,
@@ -306,8 +347,8 @@ class BillService:
         # Filter out None values
         params = {k: v for k, v in params.items() if v is not None}
 
-        # Call the primary Bill Search API
-        raw_data = await self.client.get_data(service_id_or_name=self.BILL_SEARCH_ID, params=params)
+        # Call the primary Bill Search API with retry
+        raw_data = await _get_data_with_retry(self.client, self.BILL_SEARCH_ID, params)
         rows = _collect_rows(raw_data)
 
         # Transform raw data to Pydantic models
@@ -420,8 +461,9 @@ class BillService:
                 f"Fetching bill details: service_id={detail_service_id}, BILL_NO={bill_identifier}, bill_id={bill_id}"
             )
 
-            raw_data = await self.client.get_data(
-                service_id_or_name=detail_service_id,
+            raw_data = await _get_data_with_retry(
+                self.client,
+                detail_service_id,
                 params={"BILL_NO": bill_identifier},
             )
 
@@ -514,8 +556,8 @@ class BillService:
         """
         특정 의안의 본회의 표결 통계(찬성/반대/기권 수)를 조회합니다.
         """
-        params = {"BILL_ID": bill_id, "AGE": age}
-        raw_data = await self.client.get_data(service_id_or_name=self.VOTING_SUMMARY_ID, params=params)
+        params = {"BILL_ID": bill_id, "AGE": normalize_age(age)}
+        raw_data = await _get_data_with_retry(self.client, self.VOTING_SUMMARY_ID, params)
         rows = _collect_rows(raw_data)
 
         if not rows:
@@ -551,22 +593,22 @@ class BillService:
         if bill_id:
             params = {
                 "BILL_ID": bill_id,
-                "AGE": self._normalize_age_for_api(age),
+                "AGE": normalize_age(age),
                 "pIndex": page,
                 "pSize": limit,
             }
             if name:
                 params["HG_NM"] = name
 
-            raw_data = await self.client.get_data(service_id_or_name=self.VOTING_RECORD_ID, params=params)
+            raw_data = await _get_data_with_retry(self.client, self.VOTING_RECORD_ID, params)
             rows = _collect_rows(raw_data)
             return [self._build_vote_record(row) for row in rows]
 
         # 2. 의원 성명만 있는 경우: 최근 가결된 주요 의안들에서 이 의원의 투표 기록을 찾음
         if name:
             # 검색 범위를 50개로 확대하여 매칭 확률을 높임
-            summary_params = {"AGE": age, "pSize": 50}
-            summary_data = await self.client.get_data(service_id_or_name=self.VOTING_SUMMARY_ID, params=summary_params)
+            summary_params = {"AGE": normalize_age(age), "pSize": 50}
+            summary_data = await _get_data_with_retry(self.client, self.VOTING_SUMMARY_ID, summary_params)
             summaries = _collect_rows(summary_data)
 
             all_records = []
@@ -577,9 +619,9 @@ class BillService:
                     continue
 
                 # 각 의안에 대해 이 의원이 투표했는지 확인
-                v_params = {"BILL_ID": b_id, "AGE": self._normalize_age_for_api(age), "HG_NM": name}
+                v_params = {"BILL_ID": b_id, "AGE": normalize_age(age), "HG_NM": name}
                 try:
-                    v_data = await self.client.get_data(service_id_or_name=self.VOTING_RECORD_ID, params=v_params)
+                    v_data = await _get_data_with_retry(self.client, self.VOTING_RECORD_ID, v_params)
                     v_rows = _collect_rows(v_data)
                     for row in v_rows:
                         all_records.append(self._build_vote_record(row))
@@ -630,7 +672,7 @@ class MemberService:
         Search for member information by name.
         """
         params = {"HG_NM": name}
-        raw_data = await self.client.get_data(service_id_or_name=self.MEMBER_INFO_ID, params=params)
+        raw_data = await _get_data_with_retry(self.client, self.MEMBER_INFO_ID, params)
         rows = _collect_rows(raw_data)
 
         if not name:
@@ -645,7 +687,7 @@ class MemberService:
         의원의 위원회 활동 경력을 조회하고 기간을 분석합니다.
         """
         params = {"HG_NM": name}
-        raw_data = await self.client.get_data(service_id_or_name=self.MEMBER_CAREER_ID, params=params)
+        raw_data = await _get_data_with_retry(self.client, self.MEMBER_CAREER_ID, params)
         rows = _collect_rows(raw_data)
 
         careers = []
@@ -701,24 +743,13 @@ class MeetingService:
 
     async def get_meeting_records(self, bill_id: str) -> list[dict[str, Any]]:
         """
-
-
         Get meeting records related to a bill.
-
-
         This uses a different API (OOWY4R001216HX11492) specifically for bill-related meetings.
-
-
         """
-
         # OOWY4R001216HX11492: 의안 위원회심사 회의정보 조회
-
         bill_meeting_id = "OOWY4R001216HX11492"
-
         params = {"BILL_ID": bill_id}
-
-        raw_data = await self.client.get_data(service_id_or_name=bill_meeting_id, params=params)
-
+        raw_data = await _get_data_with_retry(self.client, bill_meeting_id, params)
         return _collect_rows(raw_data)
 
     async def search_meetings(
@@ -730,52 +761,27 @@ class MeetingService:
         limit: int = 10,
     ) -> list[dict[str, Any]]:
         """
-
-
         Search for committee meetings using the Schedule API.
-
-
         This allows date range searching which the Meeting Record API doesn't support well.
 
-
-
-
-
         Args:
-
-
             committee_name: Name of the committee (e.g., "법제사법위원회")
-
-
             date_start: Start date (YYYY-MM-DD)
-
-
             date_end: End date (YYYY-MM-DD)
-
-
             page: Page number (default 1)
-
-
             limit: Max results
-
-
         """
-
         # Use Schedule API for better search capabilities
-
         # Fetch larger batch to ensure filtering doesn't reduce results too much
-
         params = {"pIndex": page, "pSize": 100}
 
         if committee_name:
             params["COMMITTEE_NAME"] = committee_name
 
         # Convert default age to UNIT_CD format (e.g. 22 -> 100022)
+        params["UNIT_CD"] = normalize_unit_cd(settings.default_assembly_age)
 
-        params["UNIT_CD"] = self._convert_unit_cd(settings.default_assembly_age)
-
-        raw_data = await self.client.get_data(service_id_or_name=self.COMMITTEE_SCHEDULE_ID, params=params)
-
+        raw_data = await _get_data_with_retry(self.client, self.COMMITTEE_SCHEDULE_ID, params)
         rows = _collect_rows(raw_data)
 
         logger.debug(
@@ -845,14 +851,9 @@ class MeetingService:
         params = {"pIndex": page, "pSize": limit}
 
         if unit_cd:
-            # The API expects 1000xx format (e.g., 100022 for 22nd assembly)
-            # If user provides "22" or "22대", we handle it gracefully.
-            clean_unit_cd = re.sub(r"[^0-9]", "", str(unit_cd))
-            if len(clean_unit_cd) > 0 and len(clean_unit_cd) <= 2:
-                clean_unit_cd = f"1000{clean_unit_cd}"
-            params["UNIT_CD"] = clean_unit_cd
+            params["UNIT_CD"] = normalize_unit_cd(unit_cd)
 
-        raw_data = await self.client.get_data(service_id_or_name=service_id, params=params)
+        raw_data = await _get_data_with_retry(self.client, service_id, params)
         return _collect_rows(raw_data)
 
 
@@ -872,7 +873,7 @@ class CommitteeService:
         if committee_name:
             params["COMMITTEE_NAME"] = committee_name
 
-        raw_data = await self.client.get_data(service_id_or_name=self.COMMITTEE_INFO_ID, params=params)
+        raw_data = await _get_data_with_retry(self.client, self.COMMITTEE_INFO_ID, params)
         rows = _collect_rows(raw_data)
 
         committees = []
@@ -916,7 +917,7 @@ class CommitteeService:
         if committee_name:
             params["COMMITTEE_NAME"] = committee_name
 
-        raw_data = await self.client.get_data(service_id_or_name=self.COMMITTEE_MEMBER_LIST_ID, params=params)
+        raw_data = await _get_data_with_retry(self.client, self.COMMITTEE_MEMBER_LIST_ID, params)
 
         # Explicitly check for INFO-200 (No corresponding data) from the raw API response
         # Structure is usually { "service_name": [ { "head": [...] }, { "row": [...] } ] }
