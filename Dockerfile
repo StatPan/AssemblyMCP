@@ -32,7 +32,8 @@ ENV PYTHONUNBUFFERED=1 \
     MCP_TRANSPORT=http \
     MCP_HOST=0.0.0.0 \
     MCP_PORT=8080 \
-    MCP_PATH=/mcp
+    MCP_PATH=/mcp \
+    MCP_STATELESS=true
 
 RUN groupadd --gid 1000 appuser \
     && useradd --uid 1000 --gid 1000 --create-home appuser
