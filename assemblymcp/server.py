@@ -453,9 +453,6 @@ async def get_committee_work_summary(committee_name: str) -> dict[str, Any]:
     return summary.model_dump(exclude_none=True)
 
 
-
-
-
 @mcp.tool()
 async def get_api_code_guide() -> dict[str, Any]:
     """
@@ -701,9 +698,6 @@ async def get_member_voting_history(
             target = f"의안 ID '{bill_id}'"
         return f"{target}에 대한 표결 기록을 찾을 수 없습니다."
     return [r.model_dump(exclude_none=True) for r in records]
-
-
-
 
 
 def main():
