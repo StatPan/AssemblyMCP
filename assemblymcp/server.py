@@ -453,33 +453,7 @@ async def get_committee_work_summary(committee_name: str) -> dict[str, Any]:
     return summary.model_dump(exclude_none=True)
 
 
-@mcp.tool()
-async def get_committee_voting_stats(committee_name: str) -> dict[str, Any]:
-    """
-    특정 위원회가 처리한 가결 법안들의 본회의 찬성률 통계를 집계하여 반환합니다.
-    해당 위원회의 법안들이 본회의에서 어떤 수치로 통과되었는지 팩트 기반으로 제공합니다.
 
-    Args:
-        committee_name: 위원회명 (예: "법제사법위원회", "기획재정위원회").
-    """
-    service = _require_service(smart_service)
-    stats = await service.get_committee_voting_stats(committee_name)
-    return stats.model_dump(exclude_none=True)
-
-
-@mcp.tool()
-async def get_topic_voting_stats(keyword: str, limit: int = 10) -> dict[str, Any]:
-    """
-    특정 키워드가 포함된 법안들의 본회의 투표 찬성률 통계를 집계하여 반환합니다.
-    단순 키워드 매칭을 통해 검색된 법안들의 수치적 합계 데이터만 제공합니다.
-
-    Args:
-        keyword: 검색 키워드 (예: "인공지능", "종합부동산세").
-        limit: 집계할 최대 법안 수 (기본 10).
-    """
-    service = _require_service(smart_service)
-    stats = await service.get_topic_voting_stats(keyword, limit=limit)
-    return stats.model_dump(exclude_none=True)
 
 
 @mcp.tool()
@@ -729,19 +703,7 @@ async def get_member_voting_history(
     return [r.model_dump(exclude_none=True) for r in records]
 
 
-@mcp.tool()
-async def get_member_committee_careers(name: str) -> list[dict[str, Any]] | str:
-    """
-    특정 국회의원의 과거 및 현재 위원회 활동 경력을 조회합니다.
 
-    Args:
-        name: 의원 성명.
-    """
-    service = _require_service(member_service)
-    careers = await service.get_member_committee_careers(name)
-    if not careers:
-        return f"의원 '{name}'에 대한 위원회 활동 경력을 찾을 수 없습니다."
-    return [c.model_dump(exclude_none=True) for c in careers]
 
 
 def main():
@@ -753,6 +715,9 @@ def main():
 
     # Check for transport configuration
     transport = os.getenv("MCP_TRANSPORT", "stdio").lower()
+    
+    # Enable stateless HTTP for PlayMCP compatibility (no session required)
+    stateless_mode = os.getenv("MCP_STATELESS", "true").lower() == "true"
 
     # Normalize transport names
     if transport in ("http", "streamable-http", "sse"):
@@ -763,8 +728,8 @@ def main():
         port = int(os.getenv("MCP_PORT", default_port))
         path = os.getenv("MCP_PATH", "/mcp")
 
-        logger.info(f"Starting AssemblyMCP with Streamable HTTP on {host}:{port}{path}")
-        mcp.run(transport="http", host=host, port=port, path=path)
+        logger.info(f"Starting AssemblyMCP with Streamable HTTP on {host}:{port}{path} (stateless={stateless_mode})")
+        mcp.run(transport="http", host=host, port=port, path=path, stateless_http=stateless_mode)
     else:
         # Default to stdio for local/desktop usage
         logger.info("Starting AssemblyMCP in stdio mode")
