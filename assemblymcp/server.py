@@ -715,7 +715,7 @@ def main():
 
     # Check for transport configuration
     transport = os.getenv("MCP_TRANSPORT", "stdio").lower()
-    
+
     # Enable stateless HTTP for PlayMCP compatibility (no session required)
     stateless_mode = os.getenv("MCP_STATELESS", "true").lower() == "true"
 

@@ -37,13 +37,13 @@ async def ensure_master_list(client: AssemblyAPIClient) -> None:
     if bundled_file.exists():
         logger.info(f"Copying bundled master list from {bundled_file} to {master_file}")
         shutil.copy(bundled_file, master_file)
-        
+
         # Reload maps after copy
         _reload_client_maps(client, cache_dir)
         return
 
     # 3. Fallback: Download from API (Requires ASSEMBLY_API_KEY)
-    logger.info(f"Master list not found. Attempting to download...")
+    logger.info("Master list not found. Attempting to download...")
     if not client.api_key:
         logger.warning("ASSEMBLY_API_KEY is missing. Only limited tools will be available.")
         return
@@ -63,13 +63,13 @@ async def ensure_master_list(client: AssemblyAPIClient) -> None:
         data = response.json()
 
         if SERVICE_LIST_API_ID not in data:
-            raise RuntimeError(f"Invalid response format for master list")
+            raise RuntimeError("Invalid response format for master list")
 
         with open(master_file, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
 
         _reload_client_maps(client, cache_dir)
-        logger.info(f"Successfully downloaded and reloaded master list.")
+        logger.info("Successfully downloaded and reloaded master list.")
 
     except Exception as e:
         logger.error(f"Failed to initialize master list: {e}")
