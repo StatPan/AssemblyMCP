@@ -11,6 +11,9 @@ logger = logging.getLogger(__name__)
 # This API returns the list of all available APIs.
 SERVICE_LIST_API_ID = "OPENSRVAPI"
 
+# Bundled specs file path (can be patched in tests)
+BUNDLED_SPECS_FILE = Path(__file__).parent / "specs" / "all_apis.json"
+
 
 async def ensure_master_list(client: AssemblyAPIClient) -> None:
     """
@@ -33,7 +36,7 @@ async def ensure_master_list(client: AssemblyAPIClient) -> None:
         return
 
     # 2. Try to copy from bundled specs (AssemblyMCP/assemblymcp/specs/all_apis.json)
-    bundled_file = Path(__file__).parent / "specs" / "all_apis.json"
+    bundled_file = BUNDLED_SPECS_FILE
     if bundled_file.exists():
         logger.info(f"Copying bundled master list from {bundled_file} to {master_file}")
         shutil.copy(bundled_file, master_file)

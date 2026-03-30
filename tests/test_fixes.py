@@ -1,5 +1,5 @@
 import json
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from assembly_client.api import AssemblyAPIClient
@@ -21,12 +21,27 @@ def mock_client(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_ensure_master_list_downloads_if_missing(mock_client):
-    """Test that ensure_master_list downloads the master list if it doesn't exist."""
+async def test_ensure_master_list_copies_bundled_if_missing(mock_client):
+    """Test that ensure_master_list copies the bundled file when cache is absent."""
     master_file = mock_client.spec_parser.cache_dir / "all_apis.json"
     assert not master_file.exists()
 
-    # Mock API response
+    await ensure_master_list(mock_client)
+
+    # Verify file was created from bundled specs
+    assert master_file.exists()
+    assert master_file.stat().st_size > 1000
+
+    # Bundled file was used — no API call needed
+    mock_client.client.get.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_ensure_master_list_downloads_if_bundled_also_missing(mock_client, tmp_path):
+    """Test that ensure_master_list falls back to API download when bundled file is absent."""
+    master_file = mock_client.spec_parser.cache_dir / "all_apis.json"
+    assert not master_file.exists()
+
     mock_response = MagicMock()
     mock_response.json.return_value = {
         "OPENSRVAPI": [
@@ -36,20 +51,18 @@ async def test_ensure_master_list_downloads_if_missing(mock_client):
     }
     mock_client.client.get.return_value = mock_response
 
-    await ensure_master_list(mock_client)
+    # Patch bundled file path to a non-existent location to force API download
+    with patch("assemblymcp.initialization.BUNDLED_SPECS_FILE", tmp_path / "no_bundled.json"):
+        await ensure_master_list(mock_client)
 
-    # Verify file created
     assert master_file.exists()
-
-    # Verify content
     with open(master_file) as f:
         data = json.load(f)
         assert "OPENSRVAPI" in data
         assert data["OPENSRVAPI"][1]["row"][0]["INF_ID"] == "TEST_ID"
 
-    # Verify API call
     mock_client.client.get.assert_called_once()
-    args, kwargs = mock_client.client.get.call_args
+    args, _ = mock_client.client.get.call_args
     assert "OPENSRVAPI" in args[0]
 
 
