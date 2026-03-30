@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from assembly_client.api import AssemblyAPIClient
 
-from assemblymcp.initialization import ensure_master_list
+from assemblymcp.initialization import BUNDLED_SPECS_FILE, ensure_master_list
 from assemblymcp.services import BillService, MemberService
 
 
@@ -28,9 +28,9 @@ async def test_ensure_master_list_copies_bundled_if_missing(mock_client):
 
     await ensure_master_list(mock_client)
 
-    # Verify file was created from bundled specs
+    # Verify file was created from bundled specs (exact content match)
     assert master_file.exists()
-    assert master_file.stat().st_size > 1000
+    assert master_file.read_text(encoding="utf-8") == BUNDLED_SPECS_FILE.read_text(encoding="utf-8")
 
     # Bundled file was used — no API call needed
     mock_client.client.get.assert_not_called()
@@ -56,7 +56,7 @@ async def test_ensure_master_list_downloads_if_bundled_also_missing(mock_client,
         await ensure_master_list(mock_client)
 
     assert master_file.exists()
-    with open(master_file) as f:
+    with open(master_file, encoding="utf-8") as f:
         data = json.load(f)
         assert "OPENSRVAPI" in data
         assert data["OPENSRVAPI"][1]["row"][0]["INF_ID"] == "TEST_ID"
