@@ -52,7 +52,7 @@ def normalize_age(val: Any) -> str:
     retry=retry_if_exception_type((AssemblyAPIError, httpx.RequestError)),
     reraise=True,
 )
-async def _get_data_with_retry(client: AssemblyAPIClient, service_id: str, params: dict[str, Any]) -> list[Any]:
+async def _get_data_with_retry(client: AssemblyAPIClient, service_id: str, params: dict[str, Any]) -> list[Any] | str:
     """Fetch data from API with retry logic."""
     try:
         return await client.get_data(service_id_or_name=service_id, params=params)
