@@ -68,6 +68,10 @@ def _collect_rows(raw_data: Any) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
 
     def _walk(node: Any) -> None:
+        # Pydantic model → convert to dict and treat as a row
+        if hasattr(node, "model_dump"):
+            rows.append(node.model_dump())
+            return
         if isinstance(node, dict):
             if "row" in node and isinstance(node["row"], list):
                 for entry in node["row"]:
