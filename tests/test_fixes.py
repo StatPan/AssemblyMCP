@@ -87,13 +87,7 @@ async def test_get_bill_details_numeric_id_bypass(mock_client):
     bill_service.get_bill_info = AsyncMock(return_value=[])
 
     # Mock get_data for detail call
-    detail_response = {
-        "OS46YD0012559515463": [
-            {"head": []},
-            {"row": [{"MAIN_CNTS": "Summary", "RSON_CONT": "Reason"}]},
-        ]
-    }
-    mock_client.get_data = AsyncMock(return_value=detail_response)
+    mock_client.get_data = AsyncMock(return_value=[{"MAIN_CNTS": "Summary", "RSON_CONT": "Reason"}])
 
     numeric_id = "2214308"
     detail = await bill_service.get_bill_details(numeric_id)

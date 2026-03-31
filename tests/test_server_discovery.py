@@ -55,9 +55,9 @@ async def test_list_services_filter_case_insensitive(discovery_service):
 
 @pytest.mark.asyncio
 async def test_call_raw_success(discovery_service, mock_client):
-    mock_client.get_data = AsyncMock(return_value={"result": "success"})
+    mock_client.get_data = AsyncMock(return_value=[{"result": "success"}])
 
     result = await discovery_service.call_raw("TEST_ID_1", params={"pSize": 5})
 
     mock_client.get_data.assert_called_once_with(service_id_or_name="TEST_ID_1", params={"pSize": 5})
-    assert result == {"result": "success"}
+    assert result == [{"result": "success"}]

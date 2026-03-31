@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 
 # Initialize API Client globally to load specs once
 try:
-    client = AssemblyAPIClient(api_key=settings.assembly_api_key)
+    client = AssemblyAPIClient(api_key=settings.api_key)
 except Exception as e:
     logger.error(f"Failed to initialize client: {e}")
     client = None
@@ -106,7 +106,7 @@ async def get_assembly_info() -> str:
         return "Error: API Client not initialized. Please check API key configuration."
 
     try:
-        api_key_status = "configured" if settings.assembly_api_key else "not configured"
+        api_key_status = "configured" if settings.api_key else "not configured"
         service_count = len(client.service_map)
         return (
             "AssemblyMCP – 대한민국 국회 OpenAPI (Korean National Assembly Open API)\n"
@@ -704,7 +704,7 @@ def main():
     """Run the MCP server"""
     sys.stdout.reconfigure(line_buffering=True)
     # Validate settings on startup (but don't fail if API key is missing yet)
-    if not settings.assembly_api_key:
+    if not settings.api_key:
         logger.warning("ASSEMBLY_API_KEY is not configured. The server will run but tools will fail.")
 
     # Check for transport configuration
