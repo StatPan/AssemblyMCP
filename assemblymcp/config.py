@@ -4,7 +4,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     # Core Settings
-    assembly_api_key: str | None = Field(None, description="National Assembly API Key")
+    api_key: str | None = Field(None, description="National Assembly API Key")
     default_assembly_age: str = Field("22", description="Default Assembly Age (e.g. 22)")
 
     # Logging Settings
