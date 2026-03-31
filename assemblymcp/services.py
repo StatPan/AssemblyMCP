@@ -52,7 +52,7 @@ def normalize_age(val: Any) -> str:
     retry=retry_if_exception_type((AssemblyAPIError, httpx.RequestError)),
     reraise=True,
 )
-async def _get_data_with_retry(client: AssemblyAPIClient, service_id: str, params: dict[str, Any]) -> dict[str, Any]:
+async def _get_data_with_retry(client: AssemblyAPIClient, service_id: str, params: dict[str, Any]) -> list[Any] | str:
     """Fetch data from API with retry logic."""
     try:
         return await client.get_data(service_id_or_name=service_id, params=params)
@@ -64,23 +64,14 @@ async def _get_data_with_retry(client: AssemblyAPIClient, service_id: str, param
 
 
 def _collect_rows(raw_data: Any) -> list[dict[str, Any]]:
-    """Walk nested API response objects and return every dict row."""
-    rows: list[dict[str, Any]] = []
+    """Convert get_data() result to a flat list of dicts.
 
-    def _walk(node: Any) -> None:
-        if isinstance(node, dict):
-            if "row" in node and isinstance(node["row"], list):
-                for entry in node["row"]:
-                    if isinstance(entry, dict):
-                        rows.append(entry)
-            for value in node.values():
-                _walk(value)
-        elif isinstance(node, list):
-            for item in node:
-                _walk(item)
-
-    _walk(raw_data)
-    return rows
+    get_data() returns list[BaseModel] (generated types) or list[dict] (fallback).
+    Both cases are handled uniformly here.
+    """
+    if not raw_data or isinstance(raw_data, str):
+        return []
+    return [item.model_dump() if hasattr(item, "model_dump") else item for item in raw_data]
 
 
 class DiscoveryService:
@@ -150,15 +141,17 @@ class DiscoveryService:
         results.sort(key=lambda x: x["name"])
         return results
 
-    async def call_raw(self, service_id_or_name: str, params: dict[str, Any]) -> dict[str, Any]:
+    async def call_raw(self, service_id_or_name: str, params: dict[str, Any]) -> list[dict[str, Any]]:
         """
         Call a specific API service with raw parameters.
+        Returns rows as a list of dicts (JSON-serializable).
         """
         # 파라미터 자동 보정 적용
         normalized_params = self._normalize_params(params)
 
         try:
-            return await _get_data_with_retry(self.client, service_id_or_name, normalized_params)
+            raw = await _get_data_with_retry(self.client, service_id_or_name, normalized_params)
+            return _collect_rows(raw)
         except AssemblyAPIError as e:
             error_msg = str(e)
 
@@ -919,67 +912,32 @@ class CommitteeService:
             params["COMMITTEE_NAME"] = committee_name
 
         raw_data = await _get_data_with_retry(self.client, self.COMMITTEE_MEMBER_LIST_ID, params)
-
-        # Explicitly check for INFO-200 (No corresponding data) from the raw API response
-        # Structure is usually { "service_name": [ { "head": [...] }, { "row": [...] } ] }
-        # or just { "RESULT": { "CODE": "...", "MESSAGE": "..." } }
-        service_key = list(raw_data.keys())[0] if raw_data else None
-        if service_key and isinstance(raw_data[service_key], list) and len(raw_data[service_key]) > 0:
-            head_section = raw_data[service_key][0].get("head")
-            if head_section and len(head_section) > 1:
-                result = head_section[1].get("RESULT")
-                if result and result.get("CODE") == "INFO-200":
-                    msg = result.get("MESSAGE")
-
-                    error_details = {
-                        "error_type": "DATA_NOT_FOUND",
-                        "api_code": result.get("CODE"),
-                        "api_message": msg,
-                        "query_info": {
-                            "committee_name": committee_name,
-                            "committee_code": committee_code,
-                        },
-                        "suggestion": (
-                            "이 위원회에 대한 위원 명단 데이터가 국회 OpenAPI에 없거나, "
-                            "검색 조건(이름)이 정확하지 않을 수 있습니다. "
-                            "get_committee_list()를 호출하여 정확한 committee_code를 "
-                            "확인 후 다시 시도하거나, 다른 검색어를 사용해보세요."
-                        ),
-                    }
-
-                    # If searched by name and no code, try to find suggestions
-                    if committee_name and not committee_code:
-                        try:
-                            candidates = await self.get_committee_list(committee_name=committee_name)
-                            valid_candidates = []
-                            for c in candidates:
-                                if c.HR_DEPT_CD and c.HR_DEPT_CD != "None":
-                                    valid_candidates.append(f"{c.COMMITTEE_NAME}(코드: {c.HR_DEPT_CD})")
-
-                            if valid_candidates:
-                                error_details["suggestion"] = (
-                                    f"입력하신 위원회명 '{committee_name}'에 대해 "
-                                    "위원 명단을 찾을 수 없습니다. "
-                                    f"다음과 같은 관련 위원회가 있습니다. "
-                                    f"해당 코드(committee_code)로 재시도해보세요: "
-                                    f"{', '.join(valid_candidates)}"
-                                )
-                            else:
-                                error_details["suggestion"] = (
-                                    f"'{committee_name}'(으)로 검색된 위원회 중 "
-                                    f"유효한 코드(HR_DEPT_CD)를 가진 위원회가 없습니다. "
-                                    "이는 해당 위원회 명단이 OpenAPI에 없거나, "
-                                    "이름이 정확하지 않을 수 있습니다. "
-                                    "get_committee_list()를 호출하여 "
-                                    "전체 위원회 목록을 확인해보세요."
-                                )
-                        except Exception as e:
-                            logger.warning(f"Error generating suggestions for '{committee_name}': {e}")
-                            # Fallback to generic suggestion if suggestion generation fails
-
-                    return {"error": error_details}
-
         rows = _collect_rows(raw_data)
+
+        if not rows and committee_name and not committee_code:
+            # 빈 결과일 때 관련 위원회 코드 제안
+            suggestion = (
+                "이 위원회에 대한 위원 명단 데이터가 국회 OpenAPI에 없거나, "
+                "검색 조건(이름)이 정확하지 않을 수 있습니다. "
+                "get_committee_list()를 호출하여 정확한 committee_code를 "
+                "확인 후 다시 시도하거나, 다른 검색어를 사용해보세요."
+            )
+            try:
+                candidates = await self.get_committee_list(committee_name=committee_name)
+                valid_candidates = [
+                    f"{c.COMMITTEE_NAME}(코드: {c.HR_DEPT_CD})"
+                    for c in candidates
+                    if c.HR_DEPT_CD and c.HR_DEPT_CD != "None"
+                ]
+                if valid_candidates:
+                    suggestion = (
+                        f"입력하신 위원회명 '{committee_name}'에 대해 위원 명단을 찾을 수 없습니다. "
+                        f"다음과 같은 관련 위원회가 있습니다. "
+                        f"해당 코드(committee_code)로 재시도해보세요: {', '.join(valid_candidates)}"
+                    )
+            except Exception as e:
+                logger.warning(f"Error generating suggestions for '{committee_name}': {e}")
+            return {"error": {"error_type": "DATA_NOT_FOUND", "suggestion": suggestion}}
 
         # CRITICAL FIX: The API sometimes ignores HR_DEPT_CD and returns all members.
         # We must manually filter by committee_code if it was provided.
