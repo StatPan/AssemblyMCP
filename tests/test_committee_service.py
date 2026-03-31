@@ -19,24 +19,26 @@ def committee_service(mock_client):
 
 @pytest.mark.asyncio
 async def test_get_committee_list(committee_service, mock_client):
-    mock_client.get_data = AsyncMock(return_value=[
-        {
-            "HR_DEPT_CD": "9700008",
-            "COMMITTEE_NAME": "법제사법위원회",
-            "CMT_DIV_NM": "상임위원회",
-            "HG_NM": "박광온",
-            "CURR_CNT": "18",
-            "LIMIT_CNT": "18",
-        },
-        {
-            "HR_DEPT_CD": "9700009",
-            "COMMITTEE_NAME": "정무위원회",
-            "CMT_DIV_NM": "상임위원회",
-            "HG_NM": "백혜련",
-            "CURR_CNT": "24",
-            "LIMIT_CNT": "24",
-        },
-    ])
+    mock_client.get_data = AsyncMock(
+        return_value=[
+            {
+                "HR_DEPT_CD": "9700008",
+                "COMMITTEE_NAME": "법제사법위원회",
+                "CMT_DIV_NM": "상임위원회",
+                "HG_NM": "박광온",
+                "CURR_CNT": "18",
+                "LIMIT_CNT": "18",
+            },
+            {
+                "HR_DEPT_CD": "9700009",
+                "COMMITTEE_NAME": "정무위원회",
+                "CMT_DIV_NM": "상임위원회",
+                "HG_NM": "백혜련",
+                "CURR_CNT": "24",
+                "LIMIT_CNT": "24",
+            },
+        ]
+    )
 
     committees = await committee_service.get_committee_list()
 
@@ -66,10 +68,12 @@ async def test_get_committee_list_filter(committee_service, mock_client):
 
 @pytest.mark.asyncio
 async def test_get_committee_members_by_code(committee_service, mock_client):
-    mock_client.get_data = AsyncMock(return_value=[
-        {"COMMITTEE_NAME": "법제사법위원회", "HR_DEPT_CD": "9700008", "HG_NM": "홍길동"},
-        {"COMMITTEE_NAME": "법제사법위원회", "HR_DEPT_CD": "9700008", "HG_NM": "임꺽정"},
-    ])
+    mock_client.get_data = AsyncMock(
+        return_value=[
+            {"COMMITTEE_NAME": "법제사법위원회", "HR_DEPT_CD": "9700008", "HG_NM": "홍길동"},
+            {"COMMITTEE_NAME": "법제사법위원회", "HR_DEPT_CD": "9700008", "HG_NM": "임꺽정"},
+        ]
+    )
 
     rows = await committee_service.get_committee_members(committee_code="9700008", limit=10)
 
@@ -82,10 +86,12 @@ async def test_get_committee_members_by_code(committee_service, mock_client):
 
 @pytest.mark.asyncio
 async def test_get_committee_members_filter_by_name(committee_service, mock_client):
-    mock_client.get_data = AsyncMock(return_value=[
-        {"COMMITTEE_NAME": "법제사법위원회", "HG_NM": "홍길동"},
-        {"COMMITTEE_NAME": "정무위원회", "HG_NM": "임꺽정"},
-    ])
+    mock_client.get_data = AsyncMock(
+        return_value=[
+            {"COMMITTEE_NAME": "법제사법위원회", "HG_NM": "홍길동"},
+            {"COMMITTEE_NAME": "정무위원회", "HG_NM": "임꺽정"},
+        ]
+    )
 
     rows = await committee_service.get_committee_members(committee_name="법제사법위원회", limit=5)
 

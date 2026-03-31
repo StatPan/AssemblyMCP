@@ -19,21 +19,23 @@ def bill_service(mock_client):
 
 @pytest.mark.asyncio
 async def test_get_bill_info_success(bill_service, mock_client):
-    mock_client.get_data = AsyncMock(return_value=[
-        {
-            "BILL_ID": "PRC_T2T3T4T5T6T7T8T9",
-            "BILL_NO": "2100001",
-            "BILL_NAME": "Test Bill",
-            "PROPOSER": "Test Proposer",
-            "PROPOSER_KIND": "Member",
-            "PROC_RESULT_NM": "Passed",
-            "CURR_COMMITTEE": "Legislation",
-            "PROPOSE_DT": "20200101",
-            "COMMITTEE_DT": "20200102",
-            "PROC_DT": "20200103",
-            "LINK_URL": "http://test.com",
-        }
-    ])
+    mock_client.get_data = AsyncMock(
+        return_value=[
+            {
+                "BILL_ID": "PRC_T2T3T4T5T6T7T8T9",
+                "BILL_NO": "2100001",
+                "BILL_NAME": "Test Bill",
+                "PROPOSER": "Test Proposer",
+                "PROPOSER_KIND": "Member",
+                "PROC_RESULT_NM": "Passed",
+                "CURR_COMMITTEE": "Legislation",
+                "PROPOSE_DT": "20200101",
+                "COMMITTEE_DT": "20200102",
+                "PROC_DT": "20200103",
+                "LINK_URL": "http://test.com",
+            }
+        ]
+    )
 
     bills = await bill_service.get_bill_info(age="21", limit=1)
 
@@ -82,11 +84,13 @@ async def test_search_bills_fallback(bill_service, mock_client):
 
 @pytest.mark.asyncio
 async def test_get_recent_bills_sorting(bill_service, mock_client):
-    mock_client.get_data = AsyncMock(return_value=[
-        {"BILL_ID": "1", "BILL_NAME": "Old", "PROPOSE_DT": "20230101", "LINK_URL": "x"},
-        {"BILL_ID": "2", "BILL_NAME": "New", "PROPOSE_DT": "20231231", "LINK_URL": "x"},
-        {"BILL_ID": "3", "BILL_NAME": "Mid", "PROPOSE_DT": "20230601", "LINK_URL": "x"},
-    ])
+    mock_client.get_data = AsyncMock(
+        return_value=[
+            {"BILL_ID": "1", "BILL_NAME": "Old", "PROPOSE_DT": "20230101", "LINK_URL": "x"},
+            {"BILL_ID": "2", "BILL_NAME": "New", "PROPOSE_DT": "20231231", "LINK_URL": "x"},
+            {"BILL_ID": "3", "BILL_NAME": "Mid", "PROPOSE_DT": "20230601", "LINK_URL": "x"},
+        ]
+    )
 
     bills = await bill_service.get_recent_bills(limit=3)
 
@@ -130,15 +134,17 @@ async def test_get_bill_details(bill_service, mock_client):
 @pytest.mark.asyncio
 async def test_bill_model_captures_both_ids(bill_service, mock_client):
     """Test that Bill model captures both BILL_ID and BILL_NO separately."""
-    mock_client.get_data = AsyncMock(return_value=[
-        {
-            "BILL_ID": "PRC_ALPHA123BETA456",
-            "BILL_NO": "2123709",
-            "BILL_NAME": "Test Bill with Both IDs",
-            "PROPOSE_DT": "20240101",
-            "LINK_URL": "http://test.com",
-        }
-    ])
+    mock_client.get_data = AsyncMock(
+        return_value=[
+            {
+                "BILL_ID": "PRC_ALPHA123BETA456",
+                "BILL_NO": "2123709",
+                "BILL_NAME": "Test Bill with Both IDs",
+                "PROPOSE_DT": "20240101",
+                "LINK_URL": "http://test.com",
+            }
+        ]
+    )
 
     bills = await bill_service.get_bill_info(age="22", limit=1)
 
@@ -151,14 +157,16 @@ async def test_bill_model_captures_both_ids(bill_service, mock_client):
 @pytest.mark.asyncio
 async def test_bill_model_fallback_when_bill_id_missing(bill_service, mock_client):
     """Test that bill_id falls back to BILL_NO when BILL_ID is missing."""
-    mock_client.get_data = AsyncMock(return_value=[
-        {
-            "BILL_NO": "2123709",
-            "BILL_NAME": "Test Bill without BILL_ID",
-            "PROPOSE_DT": "20240101",
-            "LINK_URL": "http://test.com",
-        }
-    ])
+    mock_client.get_data = AsyncMock(
+        return_value=[
+            {
+                "BILL_NO": "2123709",
+                "BILL_NAME": "Test Bill without BILL_ID",
+                "PROPOSE_DT": "20240101",
+                "LINK_URL": "http://test.com",
+            }
+        ]
+    )
 
     bills = await bill_service.get_bill_info(age="22", limit=1)
 

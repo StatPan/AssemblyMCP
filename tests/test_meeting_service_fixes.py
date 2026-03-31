@@ -22,20 +22,22 @@ async def test_search_meetings_uses_schedule_api(meeting_service, mock_client):
     """
     Test that search_meetings uses the Schedule API and filters by date correctly.
     """
-    mock_client.get_data = AsyncMock(return_value=[
-        {
-            "MEETING_DATE": "2025-12-29",
-            "TITLE": "전체회의",
-            "COMMITTEE_NAME": "법제사법위원회",
-            "UNIT_CD": "100022",
-        },
-        {
-            "MEETING_DATE": "2025-12-01",  # Out of range
-            "TITLE": "전체회의",
-            "COMMITTEE_NAME": "법제사법위원회",
-            "UNIT_CD": "100022",
-        },
-    ])
+    mock_client.get_data = AsyncMock(
+        return_value=[
+            {
+                "MEETING_DATE": "2025-12-29",
+                "TITLE": "전체회의",
+                "COMMITTEE_NAME": "법제사법위원회",
+                "UNIT_CD": "100022",
+            },
+            {
+                "MEETING_DATE": "2025-12-01",  # Out of range
+                "TITLE": "전체회의",
+                "COMMITTEE_NAME": "법제사법위원회",
+                "UNIT_CD": "100022",
+            },
+        ]
+    )
 
     settings.default_assembly_age = "22"
 

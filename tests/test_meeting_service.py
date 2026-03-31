@@ -18,20 +18,22 @@ def meeting_service(mock_client):
 
 @pytest.mark.asyncio
 async def test_search_meetings_by_committee(meeting_service, mock_client):
-    mock_client.get_data = AsyncMock(return_value=[
-        {
-            "MEETING_DATE": "2024-11-20",
-            "CONF_DATE": "20241120",
-            "COMM_NAME": "법제사법위원회",
-            "TITLE": "제410회국회(정기회) 제10차 법제사법위원회",
-        },
-        {
-            "MEETING_DATE": "2024-11-15",
-            "CONF_DATE": "20241115",
-            "COMM_NAME": "법제사법위원회",
-            "TITLE": "제410회국회(정기회) 제9차 법제사법위원회",
-        },
-    ])
+    mock_client.get_data = AsyncMock(
+        return_value=[
+            {
+                "MEETING_DATE": "2024-11-20",
+                "CONF_DATE": "20241120",
+                "COMM_NAME": "법제사법위원회",
+                "TITLE": "제410회국회(정기회) 제10차 법제사법위원회",
+            },
+            {
+                "MEETING_DATE": "2024-11-15",
+                "CONF_DATE": "20241115",
+                "COMM_NAME": "법제사법위원회",
+                "TITLE": "제410회국회(정기회) 제9차 법제사법위원회",
+            },
+        ]
+    )
 
     meetings = await meeting_service.search_meetings(committee_name="법제사법위원회")
 
@@ -57,18 +59,20 @@ async def test_search_meetings_pagination(meeting_service, mock_client):
 
 @pytest.mark.asyncio
 async def test_search_meetings_by_date_range(meeting_service, mock_client):
-    mock_client.get_data = AsyncMock(return_value=[
-        {
-            "MEETING_DATE": "2024-11-20",
-            "CONF_DATE": "20241120",
-            "COMM_NAME": "법제사법위원회",
-        },
-        {
-            "MEETING_DATE": "2024-11-10",
-            "CONF_DATE": "20241110",  # Should be filtered out
-            "COMM_NAME": "법제사법위원회",
-        },
-    ])
+    mock_client.get_data = AsyncMock(
+        return_value=[
+            {
+                "MEETING_DATE": "2024-11-20",
+                "CONF_DATE": "20241120",
+                "COMM_NAME": "법제사법위원회",
+            },
+            {
+                "MEETING_DATE": "2024-11-10",
+                "CONF_DATE": "20241110",  # Should be filtered out
+                "COMM_NAME": "법제사법위원회",
+            },
+        ]
+    )
 
     meetings = await meeting_service.search_meetings(date_start="2024-11-15")
 

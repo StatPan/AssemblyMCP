@@ -25,11 +25,13 @@ async def test_get_committee_members_filters_incorrect_codes(committee_service, 
     target_code = "9700006"
     other_code = "9700005"
 
-    mock_client.get_data = AsyncMock(return_value=[
-        {"COMMITTEE_NAME": "법제사법위원회", "HR_DEPT_CD": target_code, "HG_NM": "Target Member 1"},
-        {"COMMITTEE_NAME": "국회운영위원회", "HR_DEPT_CD": other_code, "HG_NM": "Noise Member 1"},
-        {"COMMITTEE_NAME": "법제사법위원회", "HR_DEPT_CD": target_code, "HG_NM": "Target Member 2"},
-    ])
+    mock_client.get_data = AsyncMock(
+        return_value=[
+            {"COMMITTEE_NAME": "법제사법위원회", "HR_DEPT_CD": target_code, "HG_NM": "Target Member 1"},
+            {"COMMITTEE_NAME": "국회운영위원회", "HR_DEPT_CD": other_code, "HG_NM": "Noise Member 1"},
+            {"COMMITTEE_NAME": "법제사법위원회", "HR_DEPT_CD": target_code, "HG_NM": "Target Member 2"},
+        ]
+    )
 
     rows = await committee_service.get_committee_members(committee_code=target_code, limit=100)
 
@@ -50,10 +52,12 @@ async def test_get_committee_members_filters_incorrect_codes_with_dept_cd_key(co
     target_code = "9700006"
     other_code = "9700005"
 
-    mock_client.get_data = AsyncMock(return_value=[
-        {"COMMITTEE_NAME": "법제사법위원회", "DEPT_CD": target_code, "HG_NM": "Target Member"},
-        {"COMMITTEE_NAME": "국회운영위원회", "DEPT_CD": other_code, "HG_NM": "Noise Member"},
-    ])
+    mock_client.get_data = AsyncMock(
+        return_value=[
+            {"COMMITTEE_NAME": "법제사법위원회", "DEPT_CD": target_code, "HG_NM": "Target Member"},
+            {"COMMITTEE_NAME": "국회운영위원회", "DEPT_CD": other_code, "HG_NM": "Noise Member"},
+        ]
+    )
 
     rows = await committee_service.get_committee_members(committee_code=target_code)
 
@@ -70,10 +74,12 @@ async def test_get_committee_members_empty_result_handling(committee_service, mo
     target_code = "9700006"
     other_code = "9700005"
 
-    mock_client.get_data = AsyncMock(return_value=[
-        {"DEPT_CD": other_code, "HG_NM": "Noise Member 1"},
-        {"DEPT_CD": other_code, "HG_NM": "Noise Member 2"},
-    ])
+    mock_client.get_data = AsyncMock(
+        return_value=[
+            {"DEPT_CD": other_code, "HG_NM": "Noise Member 1"},
+            {"DEPT_CD": other_code, "HG_NM": "Noise Member 2"},
+        ]
+    )
 
     rows = await committee_service.get_committee_members(committee_code=target_code)
 
@@ -88,10 +94,12 @@ async def test_get_committee_members_invalid_korean_name(committee_service, mock
     """
     typo_name = "법제사법위훤회"
 
-    mock_client.get_data = AsyncMock(return_value=[
-        {"COMMITTEE_NAME": "법제사법위원회", "HG_NM": "Member 1"},
-        {"COMMITTEE_NAME": "국회운영위원회", "HG_NM": "Member 2"},
-    ])
+    mock_client.get_data = AsyncMock(
+        return_value=[
+            {"COMMITTEE_NAME": "법제사법위원회", "HG_NM": "Member 1"},
+            {"COMMITTEE_NAME": "국회운영위원회", "HG_NM": "Member 2"},
+        ]
+    )
 
     rows = await committee_service.get_committee_members(committee_name=typo_name)
 
