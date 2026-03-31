@@ -17,7 +17,7 @@ license = "MIT"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "assembly-api-client>=1.1.0",
+    "assembly-api-client>=1.2.6",
     "beautifulsoup4>=4.14.2",
     "fastmcp>=2.13.1",
     "httpx>=0.28.1",

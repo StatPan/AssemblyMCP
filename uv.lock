@@ -27,7 +27,7 @@ wheels = [
 
 [[package]]
 name = "assembly-api-client"
-version = "1.1.0"
+version = "1.2.6"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
@@ -39,14 +39,14 @@ dependencies = [
     { name = "tenacity" },
     { name = "typer" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/20/b4/6380d7eed75e4b90154694ac5413416b3ce2177db2c88879c116a79282f5/assembly_api_client-1.1.0.tar.gz", hash = "sha256:a5381daccb3e3a11274f7326fba775321e82885ff9e89401678a46f6ebe09e14", size = 187458 }
+sdist = { url = "https://files.pythonhosted.org/packages/39/da/fe50852c4aa556d28e7a0730d184333fad56c769998d6a9fd2ed5fcf3419/assembly_api_client-1.2.6.tar.gz", hash = "sha256:3c40c13e89434488f372f08aed86742028b32770e497ef74234f4f358e56d6fa", size = 196089 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/de/0a/0ca3839647db0031b255dd4f1868a65583d54eb58c7de962dba82ac20644/assembly_api_client-1.1.0-py3-none-any.whl", hash = "sha256:b030189eb8db6cb3ec8e5272b3aba7a0f377542819da9cff132bdd22628b1ee9", size = 63795 },
+    { url = "https://files.pythonhosted.org/packages/91/3e/72106d792d38f2939814d592043cd7370a072ff33e74d4a9eb0f6961aee3/assembly_api_client-1.2.6-py3-none-any.whl", hash = "sha256:6061bab5c9e7d04f8a3187446624e8458492a9c5ecbf16870016ba22b4f9a85b", size = 64582 },
 ]
 
 [[package]]
 name = "assemblymcp"
-version = "0.6.0"
+version = "0.6.2"
 source = { editable = "." }
 dependencies = [
     { name = "assembly-api-client" },
@@ -74,7 +74,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "assembly-api-client", specifier = ">=1.1.0" },
+    { name = "assembly-api-client", specifier = ">=1.2.6" },
     { name = "beautifulsoup4", specifier = ">=4.14.2" },
     { name = "fastmcp", specifier = ">=2.13.1" },
     { name = "httpx", specifier = ">=0.28.1" },
