@@ -73,8 +73,7 @@ async def test_tool_empty_result_messages():
     with patch("assemblymcp.server.bill_service") as mock_bill:
         mock_bill.search_bills = AsyncMock(return_value=[])
         res = await search_bills.fn(keyword="no_data")
-        assert isinstance(res, str)
-        assert "검색 조건에 맞는 의안이 없습니다" in res
+        assert res == []
 
     # get_plenary_schedule
     with patch("assemblymcp.server.meeting_service") as mock_meeting:

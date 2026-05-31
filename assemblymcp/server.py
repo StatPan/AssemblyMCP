@@ -875,7 +875,7 @@ async def search_bills(
     proc_status: str | None = None,
     page: int = 1,
     limit: int = 10,
-) -> list[dict[str, Any]] | str:
+) -> list[dict[str, Any]]:
     """
     의안을 검색하거나 목록을 조회합니다. (통합 검색 도구)
 
@@ -896,7 +896,7 @@ async def search_bills(
         limit: 최대 결과 수 (기본 10).
 
     Returns:
-        검색된 의안 목록.
+        검색된 의안 목록. 결과가 없으면 MCP output schema 호환을 위해 빈 배열을 반환합니다.
     """
     service = _require_service(bill_service)
 
@@ -920,16 +920,13 @@ async def search_bills(
         )
 
     if not bills:
-        msg = "검색 조건에 맞는 의안이 없습니다."
-        if keyword:
-            msg += f" (키워드: {keyword})"
-        return msg
+        return []
 
     return [bill.model_dump(exclude_none=True) for bill in bills]
 
 
 @mcp.tool(output_schema=bill_detail_output_schema())
-async def get_bill_details(bill_id: str, age: str | None = None) -> dict[str, Any] | str:
+async def get_bill_details(bill_id: str, age: str | None = None) -> dict[str, Any] | None:
     """
     특정 의안의 상세 정보를 조회합니다.
     의안의 요약(MAJOR_CONTENT)과 제안 이유(PROPOSE_REASON)를 포함합니다.
@@ -943,12 +940,12 @@ async def get_bill_details(bill_id: str, age: str | None = None) -> dict[str, An
         age: 선택적 대수 (예: "22").
 
     Returns:
-        상세 정보가 포함된 의안 객체.
+        상세 정보가 포함된 의안 객체. 결과가 없으면 null을 반환합니다.
     """
     service = _require_service(bill_service)
     details = await service.get_bill_details(bill_id, age=age)
     if not details:
-        return f"의안 ID/번호 '{bill_id}'에 대한 상세 정보를 찾을 수 없습니다."
+        return None
     return details.model_dump(exclude_none=True)
 
 
