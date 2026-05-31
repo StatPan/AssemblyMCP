@@ -1,63 +1,99 @@
 # AssemblyMCP
 
-MCP (Model Context Protocol) server for the Korean National Assembly Open API.
-It enables AI agents like Claude to search, retrieve, and analyze legislative data, meeting records, and member information from the Korean National Assembly in real-time.
+AssemblyMCP is an MCP (Model Context Protocol) server for the Korean National Assembly Open API.
+It lets LLM clients retrieve, verify, and combine data about bills, members, committees, meetings, votes, and National Assembly reports.
 
-[한국어 설명 (Korean README)](README.md)
+[Korean README](README.md)
 
----
+## First Tool To Call
 
-## Features
+LLM clients should start a session with `get_legislative_research_kit()`.
+It returns the public tool surface, naming rules, recommended workflows, and stable failure marker contract.
 
-This server provides the following tools:
+Failure markers:
 
-*   **Bill Search & Retrieval**
-    *   `search_bills(keyword)`: Search for bills by keyword (e.g., "AI", "Budget").
-    *   `get_recent_bills()`: Get a list of recently proposed bills.
-    *   `get_bill_details(bill_id)`: Get detailed information (summary, reason for proposal) of a specific bill.
-    *   `get_bill_info(...)`: Advanced search with filters like bill ID, proposer, date, etc.
+| Marker | Meaning |
+| --- | --- |
+| `[NOT_FOUND]` | The server queried real data but found no matching row |
+| `[AMBIGUOUS]` | Multiple candidates matched and the user should narrow the identifier |
+| `[VERIFY_FAILED]` | A row was found, but expected fields did not match Assembly data |
+| `[API_FAILED]` | The Assembly API or server call failed |
+| `[PARTIAL]` | A composite workflow step failed, but remaining sections are usable |
 
-*   **Meeting Records & Committees**
-    *   `get_meeting_records(bill_id)`: Get committee meeting records related to a specific bill.
-    *   `search_meetings(...)`: Search meeting records by date, committee name, etc.
-    *   `get_committee_list()`: Get a list of National Assembly committees.
-    *   `get_committee_members(...)`: Get the roster (member list) of a committee.
+## Workflow Tools
 
-*   **Member Information**
-    *   `get_member_info(name)`: Get details about a National Assembly member (party, constituency, etc.).
+| Tool | Purpose |
+| --- | --- |
+| `verify_legislative_claims(citations_or_text, age="22", limit=5)` | Verify bill, member, committee, and vote claims against Assembly data |
+| `issue_brief(topic, age="22", limit=5)` | Combine bills, committees, meetings, reports, and voting signals for an issue |
+| `bill_timeline(bill_id, age=None)` | Normalize bill introduction, referral, meeting, vote, and disposition events |
+| `legislative_impact_map(target, target_type="auto", age="22", limit=5)` | Build a graph of related bills, committees, members, reports, and votes |
+| `watch_action_plan(topic, age="22", limit=5)` | Produce a monitoring plan and next MCP calls for a legislative topic |
 
-*   **Advanced Tools**
-    *   `get_assembly_info()`: Check server status and available API info.
-    *   `list_api_services()`: Search for all available API services.
-    *   `call_api_raw()`: (Advanced) Call API services directly with custom parameters.
+Example verification input:
 
-## LLM Usage Guide (Important)
+```json
+[
+  {"type": "bill", "value": "PRC_SAMPLE", "expected": {"status": "Committee review"}},
+  {"type": "member", "value": "Hong Gil-dong"},
+  {"type": "committee", "value": "Legislation and Judiciary Committee"},
+  {"type": "vote", "bill_id": "PRC_SAMPLE", "expected": {"yes": 180}}
+]
+```
 
-- The server can reach **~270 National Assembly OpenAPI endpoints**. If a high-level tool is missing, do NOT answer “not supported.”
-- Default pattern: `list_api_services(keyword)` → `get_api_spec(service_id)` → `call_api_raw(service_id, params)`. This lets you fetch any dataset.
-- Search with broad keywords (Korean/English, spacing variants). Use `get_api_spec` to confirm required params, then call via `call_api_raw`.
-- Example: “committee members” → search `list_api_services("위원 명단" or "committee member")` → inspect with `get_api_spec` → fetch with `call_api_raw` → enrich individuals via `get_member_info`.
-- When replying: if a high-level tool is absent, propose this workflow or directly chain the calls to produce the answer.
-- Shortcut: committee rosters are available directly via `get_committee_members`, then enrich individuals via `get_member_info`.
+Plain text input is treated as an `auto` claim and checked against bill, member, and committee candidates.
 
----
+## Lookup And Analysis Tools
+
+| Tool | Purpose |
+| --- | --- |
+| `search_bills(...)` | Search bills by keyword, bill ID, proposer, status, and related filters |
+| `get_bill_details(bill_id, age=None)` | Retrieve bill details, major content, and proposal reason |
+| `get_bill_history(bill_id)` | Compatibility bill history timeline |
+| `analyze_legislative_issue(topic, limit=5)` | Existing topic-level composite analysis |
+| `get_legislative_reports(keyword, limit=5)` | Search NABO reports and National Assembly news |
+| `get_committee_work_summary(committee_name)` | Summarize committee pending bills and related reports |
+| `get_member_info(name)` | Search National Assembly member profile data |
+| `get_representative_report(member_name)` | Combine member profile, bills, committee careers, and voting history |
+| `search_meetings(...)` | Search meetings by bill or committee |
+| `get_plenary_schedule(unit_cd=None, page=1, limit=10)` | Retrieve plenary schedules |
+| `get_committee_info(...)` | Retrieve committee list, details, and roster |
+| `get_bill_voting_results(bill_id)` | Retrieve plenary voting result and party trend sample |
+| `analyze_voting_trends(topic)` | Analyze voting trends for a topic |
+| `get_member_voting_history(...)` | Retrieve individual vote records by member or bill |
+
+## Raw API Discovery Tools
+
+AssemblyMCP can reach data that is not wrapped by high-level tools through the raw API discovery flow.
+
+| Tool | Purpose |
+| --- | --- |
+| `list_api_services(keyword="")` | Search available National Assembly API services |
+| `get_api_spec(service_id)` | Inspect parameters, response shape, and sample data |
+| `call_api_raw(service_id, params="{}")` | Directly call a specific OpenAPI service |
+| `get_api_code_guide()` | Inspect shared codes such as `UNIT_CD` and process status values |
+| `get_assembly_info()` | Retrieve server status and usage guide |
+| `ping()` | Health check |
+
+Recommended discovery path:
+
+```text
+list_api_services(keyword) -> get_api_spec(service_id) -> call_api_raw(service_id, params)
+```
 
 ## Quick Start
 
-This project is managed with `uv` and can be run directly using `uvx` without manual installation.
+### 1. Get An API Key
 
-### 1. Get API Key
-Obtain an API key from the [Public Data Portal (data.go.kr)](https://www.data.go.kr/). Look for APIs provided by the National Assembly Secretariat (국회사무처).
+Get an API key from [data.go.kr](https://www.data.go.kr/) for APIs provided by the National Assembly Secretariat.
 
 ### 2. Claude Desktop Configuration
 
-To use this MCP server with the Claude Desktop app, you need to configure it.
+Add this server to your Claude Desktop configuration file.
 
-1.  Open the configuration file:
-    *   **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
-    *   **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
 
-2.  Add the following configuration. (Replace `your_api_key_here` with your actual API key)
+Windows: `%APPDATA%\Claude\claude_desktop_config.json`
 
 ```json
 {
@@ -73,95 +109,69 @@ To use this MCP server with the Claude Desktop app, you need to configure it.
 }
 ```
 
-3.  Restart Claude Desktop. You should see the 🔌 icon indicating the AssemblyMCP tools are active.
+Restart Claude Desktop after editing the configuration.
 
-### 3. Running Directly (Testing)
-
-You can run the server directly in your terminal to verify it starts correctly.
+### 3. Run Locally
 
 ```bash
-# Set API Key (Linux/macOS)
 export ASSEMBLY_API_KEY="your_api_key_here"
-
-# Run Server
-# Fetches the latest code from GitHub and runs it.
 uvx git+https://github.com/StatPan/AssemblyMCP
 ```
 
----
-
-To contribute or run locally for development:
-
-### Requirements
-- Python 3.12+
-- [uv](https://github.com/astral-sh/uv) package manager
-
-### Setup & Run
+Run with Streamable HTTP:
 
 ```bash
-# 1. Clone repository
+export ASSEMBLY_API_KEY="your_api_key_here"
+export MCP_TRANSPORT=http
+export MCP_PORT=8000
+export MCP_PATH=/mcp
+uvx git+https://github.com/StatPan/AssemblyMCP
+```
+
+## Development
+
+### Requirements
+
+- Python 3.12+
+- [uv](https://github.com/astral-sh/uv)
+
+### Setup And Test
+
+```bash
 git clone https://github.com/StatPan/AssemblyMCP.git
 cd AssemblyMCP
-
-# 2. Install dependencies
 uv sync
 
-# 3. Configure environment
-cp .env.example .env
-# Edit .env and add your ASSEMBLY_API_KEY
-
-# 4. Run development server
+export ASSEMBLY_API_KEY="your_api_key_here"
 uv run assemblymcp
 ```
 
-### Code Quality
+Quality checks:
+
 ```bash
-# Lint and Format
 uv run ruff check .
 uv run ruff format .
-
-# Run Tests
 uv run pytest
 ```
 
-## Configuration & Hosting
+## Environment Variables
 
-AssemblyMCP adopts a **"Battery-Included"** architecture, allowing you to control operational features like logging and caching via environment variables without modifying the code.
-
-### Environment Variables
-
-| Variable | Description | Default | Example |
-| :--- | :--- | :--- | :--- |
-| `ASSEMBLY_API_KEY` | **[Required]** API Key | - | `1234abcd...` |
-| `ASSEMBLY_LOG_LEVEL` | Logging Level | `INFO` | `DEBUG` |
-| `ASSEMBLY_LOG_JSON` | Enable JSON Logging (for Cloud Run) | `False` | `True` |
-| `ASSEMBLY_ENABLE_CACHING` | Enable In-Memory Caching | `False` | `True` |
-| `ASSEMBLY_CACHE_TTL_SECONDS` | Cache TTL (seconds) | `300` (5 min) | `600` |
-| `ASSEMBLY_CACHE_MAX_SIZE` | Max Cache Items | `100` | `500` |
-
-### Production Mode
-
-For serverless environments like Cloud Run or AWS Lambda, we recommend the following settings:
-
-```bash
-# Enable JSON logging for structured logs
-export ASSEMBLY_LOG_JSON=true
-
-# Enable caching to reduce API calls and improve speed
-export ASSEMBLY_ENABLE_CACHING=true
-```
+| Variable | Description | Default |
+| --- | --- | --- |
+| `ASSEMBLY_API_KEY` | National Assembly OpenAPI key | none |
+| `ASSEMBLY_LOG_LEVEL` | Logging level | `INFO` |
+| `ASSEMBLY_LOG_JSON` | JSON structured logging | `False` |
+| `ASSEMBLY_ENABLE_CACHING` | In-memory caching | `False` |
+| `ASSEMBLY_CACHE_TTL_SECONDS` | Cache TTL | `300` |
+| `ASSEMBLY_CACHE_MAX_SIZE` | Maximum cache entries | `100` |
+| `MCP_TRANSPORT` | `stdio` or `http` | `stdio` |
+| `MCP_HOST` | HTTP bind host | `0.0.0.0` |
+| `MCP_PORT` | HTTP port | `8000` |
+| `MCP_PATH` | HTTP MCP path | `/mcp` |
 
 ## Deployment
 
-This server can be easily deployed to cloud platforms like Google Cloud Run, Railway, and Fly.io using Docker.
-
-### Docker Deployment
-
-1. A **Dockerfile** is included, so you can build immediately.
-2. Set the required environment variables (e.g., `ASSEMBLY_API_KEY`) during deployment.
-3. The server runs in `Streamable HTTP` mode on port `8000` by default.
-
-### Google Cloud Run Example
+The repository includes a Dockerfile and can be deployed to Cloud Run, Railway, Fly.io, or similar platforms.
 
 ```bash
 gcloud run deploy assembly-mcp \
@@ -171,10 +181,7 @@ gcloud run deploy assembly-mcp \
   --set-env-vars ASSEMBLY_API_KEY="your_key",ASSEMBLY_LOG_JSON="true",ASSEMBLY_ENABLE_CACHING="true"
 ```
 
-### Key Changes
-
-- **Streamable HTTP Transport**: Uses the latest MCP standard.
-- **Endpoint**: The MCP server runs at `/mcp`.
+The default HTTP MCP endpoint path is `/mcp`.
 
 ## License
 
