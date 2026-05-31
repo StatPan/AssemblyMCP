@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import sys
 import traceback
 from typing import Any, TypeVar
@@ -33,6 +34,17 @@ from assemblymcp.services import (
     MemberService,
 )
 from assemblymcp.smart import SmartService
+from assemblymcp.ux import (
+    compact_bill,
+    failure_marker,
+    marker,
+    normalize_claim_type,
+    normalize_date,
+    normalize_text,
+    parse_claims,
+    to_public_data,
+    workflow_contract,
+)
 
 # Configure logging based on settings
 configure_logging()
@@ -84,10 +96,557 @@ def _require_service[ServiceT](service: ServiceT | None) -> ServiceT:
     return service
 
 
+def _looks_like_bill_identifier(value: Any) -> bool:
+    text = str(value or "").strip()
+    return text.startswith("PRC_") or (text.isdigit() and 5 <= len(text) <= 10)
+
+
+def _claim_value(claim: dict[str, Any]) -> str:
+    value = (
+        claim.get("value")
+        or claim.get("bill_id")
+        or claim.get("bill_name")
+        or claim.get("name")
+        or claim.get("committee_name")
+        or claim.get("text")
+    )
+    return str(value or "").strip()
+
+
+def _expected_mismatches(data: dict[str, Any], expected: Any) -> list[dict[str, Any]]:
+    if not isinstance(expected, dict) or not expected:
+        return []
+
+    aliases = {
+        "status": "PROC_STATUS",
+        "proc_status": "PROC_STATUS",
+        "committee": "CURR_COMMITTEE",
+        "committee_name": "CURR_COMMITTEE",
+        "bill_name": "BILL_NAME",
+        "name": "BILL_NAME",
+        "proposer": "PROPOSER",
+        "yes": "YES_TCNT",
+        "no": "NO_TCNT",
+        "blank": "BLANK_TCNT",
+        "vote_total": "VOTE_TCNT",
+        "result": "PROC_RESULT_CD",
+    }
+
+    mismatches = []
+    for raw_key, expected_value in expected.items():
+        key = aliases.get(str(raw_key).casefold(), str(raw_key))
+        actual = data.get(key)
+        if isinstance(expected_value, int | float) or isinstance(actual, int | float):
+            if actual != expected_value:
+                mismatches.append({"field": key, "expected": expected_value, "actual": actual})
+            continue
+        if normalize_text(expected_value) not in normalize_text(actual):
+            mismatches.append({"field": key, "expected": expected_value, "actual": actual})
+    return mismatches
+
+
+def _verification_success(claim: dict[str, Any], entity_type: str, data: Any, source_tool: str) -> dict[str, Any]:
+    return {
+        "ok": True,
+        "marker": None,
+        "claim": claim,
+        "entity_type": entity_type,
+        "source_tool": source_tool,
+        "matched": to_public_data(data),
+    }
+
+
+async def _verify_bill_claim(claim: dict[str, Any], *, age: str, limit: int) -> dict[str, Any]:
+    service = _require_service(bill_service)
+    value = _claim_value(claim)
+    if not value:
+        return failure_marker(
+            "verify_failed",
+            "Bill claim requires value, bill_id, or bill_name.",
+            source_tools=["verify_legislative_claims"],
+            details={"claim": claim},
+        )
+
+    if _looks_like_bill_identifier(value):
+        details = await service.get_bill_details(value, age=age)
+        if not details:
+            return failure_marker(
+                "not_found",
+                f"No bill was found for identifier '{value}'.",
+                attempted_queries=[{"tool": "get_bill_details", "bill_id": value, "age": age}],
+                source_tools=["get_bill_details"],
+                suggested_next_queries=[{"tool": "search_bills", "keyword": value, "age": age}],
+                details={"claim": claim},
+            )
+        data = to_public_data(details)
+    else:
+        matches = await service.get_bill_info(age=age, bill_name=value, limit=limit)
+        exact = [
+            item for item in matches if normalize_text(to_public_data(item).get("BILL_NAME")) == normalize_text(value)
+        ]
+        if not matches:
+            return failure_marker(
+                "not_found",
+                f"No bill matched '{value}'.",
+                attempted_queries=[{"tool": "search_bills", "keyword": value, "age": age, "limit": limit}],
+                source_tools=["search_bills"],
+                suggested_next_queries=[{"tool": "list_api_services", "keyword": value}],
+                details={"claim": claim},
+            )
+        if len(matches) > 1 and not exact:
+            return failure_marker(
+                "ambiguous",
+                f"Multiple bills matched '{value}'.",
+                attempted_queries=[{"tool": "search_bills", "keyword": value, "age": age, "limit": limit}],
+                source_tools=["search_bills"],
+                suggested_next_queries=[
+                    {"tool": "get_bill_details", "bill_id": compact_bill(item).get("BILL_ID"), "age": age}
+                    for item in matches[:limit]
+                ],
+                details={"claim": claim, "candidates": [compact_bill(item) for item in matches[:limit]]},
+            )
+        data = to_public_data((exact or matches)[0])
+
+    mismatches = _expected_mismatches(data, claim.get("expected"))
+    if mismatches:
+        return failure_marker(
+            "verify_failed",
+            "Bill was found, but expected fields did not match Assembly data.",
+            source_tools=["get_bill_details", "search_bills"],
+            details={"claim": claim, "matched": data, "mismatches": mismatches},
+        )
+    return _verification_success(
+        claim, "bill", data, "get_bill_details" if _looks_like_bill_identifier(value) else "search_bills"
+    )
+
+
+async def _verify_member_claim(claim: dict[str, Any], *, limit: int) -> dict[str, Any]:
+    service = _require_service(member_service)
+    value = _claim_value(claim)
+    if not value:
+        return failure_marker(
+            "verify_failed",
+            "Member claim requires value or name.",
+            source_tools=["verify_legislative_claims"],
+            details={"claim": claim},
+        )
+
+    matches = await service.get_member_info(value)
+    exact = [item for item in matches if normalize_text(item.get("HG_NM")) == normalize_text(value)]
+    if not matches:
+        return failure_marker(
+            "not_found",
+            f"No member matched '{value}'.",
+            attempted_queries=[{"tool": "get_member_info", "name": value}],
+            source_tools=["get_member_info"],
+            suggested_next_queries=[{"tool": "list_api_services", "keyword": "국회의원 인적사항"}],
+            details={"claim": claim},
+        )
+    if len(matches) > 1 and not exact:
+        return failure_marker(
+            "ambiguous",
+            f"Multiple members matched '{value}'.",
+            attempted_queries=[{"tool": "get_member_info", "name": value}],
+            source_tools=["get_member_info"],
+            suggested_next_queries=[
+                {"tool": "get_representative_report", "member_name": item.get("HG_NM")} for item in matches[:limit]
+            ],
+            details={"claim": claim, "candidates": matches[:limit]},
+        )
+
+    data = (exact or matches)[0]
+    mismatches = _expected_mismatches(data, claim.get("expected"))
+    if mismatches:
+        return failure_marker(
+            "verify_failed",
+            "Member was found, but expected fields did not match Assembly data.",
+            source_tools=["get_member_info"],
+            details={"claim": claim, "matched": data, "mismatches": mismatches},
+        )
+    return _verification_success(claim, "member", data, "get_member_info")
+
+
+async def _verify_committee_claim(claim: dict[str, Any], *, limit: int) -> dict[str, Any]:
+    service = _require_service(committee_service)
+    value = _claim_value(claim)
+    if not value:
+        return failure_marker(
+            "verify_failed",
+            "Committee claim requires value or committee_name.",
+            source_tools=["verify_legislative_claims"],
+            details={"claim": claim},
+        )
+
+    matches = await service.get_committee_list(value)
+    exact = [item for item in matches if normalize_text(item.COMMITTEE_NAME) == normalize_text(value)]
+    if not matches:
+        return failure_marker(
+            "not_found",
+            f"No committee matched '{value}'.",
+            attempted_queries=[{"tool": "get_committee_info", "committee_name": value}],
+            source_tools=["get_committee_info"],
+            suggested_next_queries=[{"tool": "get_committee_info"}],
+            details={"claim": claim},
+        )
+    if len(matches) > 1 and not exact:
+        return failure_marker(
+            "ambiguous",
+            f"Multiple committees matched '{value}'.",
+            attempted_queries=[{"tool": "get_committee_info", "committee_name": value}],
+            source_tools=["get_committee_info"],
+            suggested_next_queries=[
+                {"tool": "get_committee_info", "committee_code": to_public_data(item).get("HR_DEPT_CD")}
+                for item in matches[:limit]
+            ],
+            details={"claim": claim, "candidates": to_public_data(matches[:limit])},
+        )
+
+    data = to_public_data((exact or matches)[0])
+    mismatches = _expected_mismatches(data, claim.get("expected"))
+    if mismatches:
+        return failure_marker(
+            "verify_failed",
+            "Committee was found, but expected fields did not match Assembly data.",
+            source_tools=["get_committee_info"],
+            details={"claim": claim, "matched": data, "mismatches": mismatches},
+        )
+    return _verification_success(claim, "committee", data, "get_committee_info")
+
+
+async def _verify_vote_claim(claim: dict[str, Any], *, age: str) -> dict[str, Any]:
+    service = _require_service(bill_service)
+    bill_id = str(claim.get("bill_id") or claim.get("value") or "").strip()
+    if not bill_id:
+        return failure_marker(
+            "verify_failed",
+            "Vote claim requires bill_id or value.",
+            source_tools=["verify_legislative_claims"],
+            details={"claim": claim},
+        )
+
+    summary = await service.get_bill_voting_summary(bill_id, age=age)
+    if not summary:
+        return failure_marker(
+            "not_found",
+            f"No voting summary was found for bill '{bill_id}'.",
+            attempted_queries=[{"tool": "get_bill_voting_results", "bill_id": bill_id, "age": age}],
+            source_tools=["get_bill_voting_results"],
+            suggested_next_queries=[{"tool": "search_bills", "bill_id": bill_id, "age": age}],
+            details={"claim": claim},
+        )
+
+    data = to_public_data(summary)
+    mismatches = _expected_mismatches(data, claim.get("expected"))
+    if mismatches:
+        return failure_marker(
+            "verify_failed",
+            "Voting summary was found, but expected fields did not match Assembly data.",
+            source_tools=["get_bill_voting_results"],
+            details={"claim": claim, "matched": data, "mismatches": mismatches},
+        )
+    return _verification_success(claim, "vote", data, "get_bill_voting_results")
+
+
+async def _verify_claim(claim: dict[str, Any], *, age: str, limit: int) -> dict[str, Any]:
+    claim_type = normalize_claim_type(claim.get("type"))
+    if claim_type == "bill":
+        return await _verify_bill_claim(claim, age=age, limit=limit)
+    if claim_type == "member":
+        return await _verify_member_claim(claim, limit=limit)
+    if claim_type == "committee":
+        return await _verify_committee_claim(claim, limit=limit)
+    if claim_type == "vote":
+        return await _verify_vote_claim(claim, age=age)
+
+    value = _claim_value(claim)
+    if _looks_like_bill_identifier(value) or "법" in value or "의안" in value:
+        result = await _verify_bill_claim({**claim, "type": "bill"}, age=age, limit=limit)
+        if result.get("ok") or result.get("marker") != marker("not_found"):
+            return result
+
+    for verifier, entity_type in [
+        (_verify_member_claim, "member"),
+        (_verify_committee_claim, "committee"),
+        (_verify_bill_claim, "bill"),
+    ]:
+        next_claim = {**claim, "type": entity_type}
+        if entity_type == "bill":
+            result = await verifier(next_claim, age=age, limit=limit)
+        else:
+            result = await verifier(next_claim, limit=limit)
+        if result.get("ok") or result.get("marker") != marker("not_found"):
+            return result
+
+    return failure_marker(
+        "not_found",
+        f"No supported legislative entity matched '{value}'.",
+        attempted_queries=[
+            {"tool": "get_member_info", "name": value},
+            {"tool": "get_committee_info", "committee_name": value},
+            {"tool": "search_bills", "keyword": value, "age": age},
+        ],
+        source_tools=["get_member_info", "get_committee_info", "search_bills"],
+        details={"claim": claim},
+    )
+
+
+async def _build_issue_brief(topic: str, *, age: str = "22", limit: int = 5) -> dict[str, Any]:
+    bill_svc = _require_service(bill_service)
+    meeting_svc = _require_service(meeting_service)
+    smart_svc = _require_service(smart_service)
+
+    warnings: list[dict[str, Any]] = []
+
+    async def guarded(label: str, tool: str, coro):
+        try:
+            return await coro
+        except Exception as exc:
+            logger.warning("Workflow step failed (%s): %s", label, exc)
+            warnings.append(
+                failure_marker(
+                    "partial",
+                    f"{label} step failed: {type(exc).__name__}: {exc}",
+                    source_tools=[tool],
+                    details={"topic": topic},
+                )
+            )
+            return None
+
+    bills = await guarded("bill_search", "search_bills", bill_svc.get_bill_info(age=age, bill_name=topic, limit=limit))
+    if not bills:
+        bills = await guarded("bill_search_fallback", "search_bills", bill_svc.search_bills(topic, limit=limit))
+    bills = bills or []
+
+    reports = await guarded("reports", "get_legislative_reports", smart_svc.get_legislative_reports(topic, limit=limit))
+    reports = reports or []
+
+    committee_names = []
+    for bill in bills:
+        name = compact_bill(bill).get("CURR_COMMITTEE")
+        if name and name not in committee_names and name != "Unknown":
+            committee_names.append(name)
+
+    meetings: list[dict[str, Any]] = []
+    for committee_name in committee_names[:3]:
+        found = await guarded(
+            f"meetings:{committee_name}",
+            "search_meetings",
+            meeting_svc.search_meetings(committee_name=committee_name, limit=3),
+        )
+        if found:
+            meetings.extend(found[:3])
+
+    voting_signal = []
+    for bill in bills[: min(limit, 5)]:
+        bill_data = compact_bill(bill)
+        summary = await guarded(
+            f"vote:{bill_data.get('BILL_ID')}",
+            "get_bill_voting_results",
+            bill_svc.get_bill_voting_summary(bill_data.get("BILL_ID"), age=age),
+        )
+        if summary:
+            voting_signal.append(to_public_data(summary))
+
+    if not bills:
+        warnings.append(
+            failure_marker(
+                "not_found",
+                f"No bills matched issue topic '{topic}'.",
+                attempted_queries=[{"tool": "search_bills", "keyword": topic, "age": age, "limit": limit}],
+                source_tools=["search_bills"],
+                suggested_next_queries=[{"tool": "list_api_services", "keyword": topic}],
+            )
+        )
+
+    return {
+        "topic": topic,
+        "assembly_age": age,
+        "summary": {
+            "bill_count": len(bills),
+            "committee_count": len(committee_names),
+            "meeting_count": len(meetings),
+            "report_count": len(reports),
+            "voting_summary_count": len(voting_signal),
+        },
+        "bills": [compact_bill(item) for item in bills[:limit]],
+        "committees": committee_names[:limit],
+        "meetings": meetings[:limit],
+        "reports": [to_public_data(item) for item in reports[:limit]],
+        "voting_signal": voting_signal,
+        "follow_up": [
+            {"tool": "bill_timeline", "bill_id": compact_bill(item).get("BILL_ID"), "age": age}
+            for item in bills[: min(3, len(bills))]
+        ]
+        + [{"tool": "legislative_impact_map", "target": topic, "target_type": "topic", "age": age, "limit": limit}],
+        "warnings": warnings,
+    }
+
+
+async def _build_bill_timeline(bill_id: str, *, age: str | None = None) -> dict[str, Any]:
+    bill_svc = _require_service(bill_service)
+    meeting_svc = _require_service(meeting_service)
+
+    details = await bill_svc.get_bill_details(bill_id, age=age)
+    if not details:
+        return failure_marker(
+            "not_found",
+            f"No bill details were found for '{bill_id}'.",
+            attempted_queries=[{"tool": "get_bill_details", "bill_id": bill_id, "age": age}],
+            source_tools=["get_bill_details"],
+            suggested_next_queries=[{"tool": "search_bills", "bill_id": bill_id, "age": age}],
+        )
+
+    bill_data = compact_bill(details)
+    events: list[dict[str, Any]] = []
+
+    def add_event(
+        date: Any,
+        event_type: str,
+        title: str,
+        *,
+        source_tool: str,
+        source_id: str | None = None,
+        confidence: str = "high",
+        details_data: dict[str, Any] | None = None,
+    ):
+        events.append(
+            {
+                "date": normalize_date(date) or "unknown",
+                "event_type": event_type,
+                "title": title,
+                "source_tool": source_tool,
+                "source_id": source_id or bill_data.get("BILL_ID"),
+                "confidence": confidence,
+                "details": details_data or {},
+            }
+        )
+
+    if bill_data.get("PROPOSE_DT"):
+        add_event(
+            bill_data.get("PROPOSE_DT"),
+            "introduced",
+            "의안 발의",
+            source_tool="get_bill_details",
+            details_data={"proposer": bill_data.get("PROPOSER")},
+        )
+    if bill_data.get("COMMITTEE_DT"):
+        add_event(
+            bill_data.get("COMMITTEE_DT"),
+            "referred_to_committee",
+            "위원회 회부",
+            source_tool="get_bill_details",
+            details_data={"committee": bill_data.get("CURR_COMMITTEE")},
+        )
+
+    warnings: list[dict[str, Any]] = []
+    try:
+        meetings = await meeting_svc.get_meeting_records(bill_data.get("BILL_ID") or bill_id)
+    except Exception as exc:
+        meetings = []
+        warnings.append(
+            failure_marker(
+                "partial",
+                f"Meeting timeline step failed: {type(exc).__name__}: {exc}",
+                source_tools=["search_meetings"],
+                details={"bill_id": bill_id},
+            )
+        )
+
+    for meeting in meetings:
+        add_event(
+            meeting.get("CONF_DATE") or meeting.get("MEETING_DATE"),
+            "committee_meeting",
+            "위원회 회의",
+            source_tool="search_meetings",
+            source_id=meeting.get("CONF_ID") or meeting.get("MEETING_ID") or bill_data.get("BILL_ID"),
+            confidence="medium",
+            details_data={
+                "committee": meeting.get("COMM_NAME") or meeting.get("COMMITTEE_NAME"),
+                "title": meeting.get("CONF_TITLE") or meeting.get("TITLE"),
+            },
+        )
+
+    try:
+        vote = await bill_svc.get_bill_voting_summary(bill_data.get("BILL_ID") or bill_id, age=age or "22")
+    except Exception as exc:
+        vote = None
+        warnings.append(
+            failure_marker(
+                "partial",
+                f"Voting timeline step failed: {type(exc).__name__}: {exc}",
+                source_tools=["get_bill_voting_results"],
+                details={"bill_id": bill_id},
+            )
+        )
+    if vote:
+        vote_data = to_public_data(vote)
+        add_event(
+            vote_data.get("PROC_DT"),
+            "plenary_vote",
+            "본회의 표결",
+            source_tool="get_bill_voting_results",
+            details_data=vote_data,
+        )
+
+    if bill_data.get("PROC_DT"):
+        add_event(
+            bill_data.get("PROC_DT"),
+            "final_disposition",
+            "최종 처리",
+            source_tool="get_bill_details",
+            details_data={"proc_status": bill_data.get("PROC_STATUS")},
+        )
+
+    events.sort(key=lambda item: (item["date"] == "unknown", item["date"], item["event_type"]))
+    return {"bill": bill_data, "events": events, "warnings": warnings}
+
+
+def _node_id(kind: str, value: str) -> str:
+    return f"{kind}:{normalize_text(value) or 'unknown'}"
+
+
+def _add_node(nodes: dict[str, dict[str, Any]], kind: str, label: str, **attrs: Any) -> str:
+    node_id = _node_id(kind, label)
+    nodes.setdefault(node_id, {"id": node_id, "type": kind, "label": label})
+    nodes[node_id].update({k: v for k, v in attrs.items() if v is not None})
+    return node_id
+
+
+def _add_edge(edges: list[dict[str, Any]], source: str, target: str, relation: str, evidence: dict[str, Any]) -> None:
+    edges.append({"source": source, "target": target, "relation": relation, "evidence": evidence})
+
+
+def _mermaid_graph(nodes: dict[str, dict[str, Any]], edges: list[dict[str, Any]]) -> str:
+    lines = ["graph TD"]
+    for node_id, node in nodes.items():
+        safe_id = re.sub(r"[^A-Za-z0-9_]", "_", node_id)
+        label = str(node.get("label", "")).replace('"', "'")
+        lines.append(f'  {safe_id}["{label}"]')
+    for edge in edges:
+        source = re.sub(r"[^A-Za-z0-9_]", "_", edge["source"])
+        target = re.sub(r"[^A-Za-z0-9_]", "_", edge["target"])
+        relation = str(edge["relation"]).replace('"', "'")
+        lines.append(f"  {source} -->|{relation}| {target}")
+    return "\n".join(lines)
+
+
 @mcp.tool()
 async def ping() -> str:
     """Check if server is alive."""
     return "pong"
+
+
+@mcp.tool()
+async def get_legislative_research_kit() -> dict[str, Any]:
+    """
+    AssemblyMCP를 처음 호출하는 LLM/클라이언트를 위한 공개 도구 표면과 워크플로 계약을 반환합니다.
+
+    기능:
+    - 검증/브리핑/타임라인/관계도/모니터링 중심의 권장 도구 경로 안내
+    - 공개 도구명 네이밍 규칙과 호환성 정책 설명
+    - [NOT_FOUND], [AMBIGUOUS], [VERIFY_FAILED], [API_FAILED], [PARTIAL] 실패 마커 의미 제공
+    """
+    return workflow_contract()
 
 
 @mcp.tool()
@@ -115,6 +674,14 @@ async def get_assembly_info() -> str:
             "핵심 원칙: 고수준 툴에 기능이 없다고 검색을 중단하지 마세요.\n"
             "AssemblyMCP는 LLM의 사용 편의성을 극대화하는 지능형 기능을 제공합니다.\n\n"
             "👉 핵심 워크플로우:\n"
+            "0) 첫 호출 안내: get_legislative_research_kit() -> 공개 워크플로 도구/실패 마커 계약\n"
+            "1) 주장 검증: verify_legislative_claims('[...]') -> 의안/의원/위원회/표결 인용 검증\n"
+            "2) 이슈 브리프: issue_brief('주제') -> 법안, 위원회, 회의, 보고서, 표결 신호 통합\n"
+            "3) 의안 타임라인: bill_timeline('의안ID') -> 발의/회부/회의/표결/처리 이벤트 정규화\n"
+            "4) 영향 지도: legislative_impact_map('주제 또는 의안ID') -> 엔티티 관계 그래프\n"
+            "5) 모니터링 계획: watch_action_plan('주제') -> 후속 조회 계획\n"
+            "\n"
+            "👉 기존 분석 도구:\n"
             "1) 종합 분석: analyze_legislative_issue('주제') -> 법안, 회의록, 의원 통합 리포트\n"
             "2) 의원 분석: get_representative_report('의원명') -> 인적사항, 발의법안, 경력, 투표이력 종합 리포트\n"
             "3) 투표 분석: get_bill_voting_results('의안ID') -> 본회의 표결 결과 및 정당별 찬반 경향\n"
@@ -420,6 +987,240 @@ async def analyze_legislative_issue(topic: str, limit: int = 5) -> dict[str, Any
     if isinstance(result, dict) and result.get("message") == "데이터 없음":
         return f"주제 '{topic}'에 대한 입법 현황 데이터를 찾을 수 없습니다."
     return result
+
+
+@mcp.tool()
+async def verify_legislative_claims(
+    citations_or_text: str,
+    age: str = "22",
+    limit: int = 5,
+) -> dict[str, Any]:
+    """
+    의안/의원/위원회/표결 주장 또는 인용을 국회 OpenAPI 데이터로 검증합니다.
+
+    입력 형식:
+    - JSON 배열: [{"type": "bill", "value": "간호법안"}, {"type": "member", "value": "홍길동"}]
+    - JSON 객체: {"type": "vote", "bill_id": "PRC_...", "expected": {"yes": 180}}
+    - 일반 텍스트: 자동으로 의안/의원/위원회 후보를 순차 확인합니다.
+
+    실패는 [NOT_FOUND], [AMBIGUOUS], [VERIFY_FAILED], [API_FAILED] 마커가 포함된 구조화 객체로 반환됩니다.
+    """
+    claims = parse_claims(citations_or_text)
+    if not claims:
+        return {
+            "ok": False,
+            "marker": marker("verify_failed"),
+            "verified_count": 0,
+            "failed_count": 1,
+            "results": [
+                failure_marker(
+                    "verify_failed",
+                    "No claims were provided.",
+                    source_tools=["verify_legislative_claims"],
+                    suggested_next_queries=[{"tool": "verify_legislative_claims", "citations_or_text": "[...]"}],
+                )
+            ],
+        }
+
+    results = []
+    for claim in claims[: max(1, limit)]:
+        try:
+            results.append(await _verify_claim(claim, age=age, limit=limit))
+        except Exception as exc:
+            logger.exception("Claim verification failed")
+            results.append(
+                failure_marker(
+                    "api_failed",
+                    f"Verification failed while calling Assembly API: {type(exc).__name__}: {exc}",
+                    source_tools=["verify_legislative_claims"],
+                    details={"claim": claim},
+                )
+            )
+
+    verified_count = sum(1 for item in results if item.get("ok"))
+    return {
+        "ok": verified_count == len(results),
+        "verified_count": verified_count,
+        "failed_count": len(results) - verified_count,
+        "results": results,
+    }
+
+
+@mcp.tool()
+async def issue_brief(topic: str, age: str = "22", limit: int = 5) -> dict[str, Any]:
+    """
+    입법 주제에 대한 워크플로형 브리프를 생성합니다.
+
+    관련 의안, 소관 위원회, 회의 일정/기록, 국회 보고서/뉴스, 본회의 표결 신호를 조합하고
+    일부 하위 조회 실패는 [PARTIAL] 경고로 보존합니다.
+    """
+    return await _build_issue_brief(topic, age=age, limit=limit)
+
+
+@mcp.tool()
+async def bill_timeline(bill_id: str, age: str | None = None) -> dict[str, Any]:
+    """
+    특정 의안의 발의, 위원회 회부, 회의, 본회의 표결, 최종 처리 이벤트를 정규화된 타임라인으로 반환합니다.
+
+    기존 get_bill_history보다 event_type/source_tool/confidence 필드를 명시해 LLM이 후속 검증을 이어가기 쉽게 합니다.
+    """
+    return await _build_bill_timeline(bill_id, age=age)
+
+
+@mcp.tool()
+async def legislative_impact_map(
+    target: str,
+    target_type: str = "auto",
+    age: str = "22",
+    limit: int = 5,
+) -> dict[str, Any]:
+    """
+    주제 또는 의안을 중심으로 법안, 위원회, 의원, 보고서, 표결 신호의 관계 그래프를 생성합니다.
+
+    target_type은 auto/topic/bill을 지원합니다. 결과는 nodes, edges, mermaid, top_followups로 구성됩니다.
+    """
+    normalized_target_type = normalize_claim_type(target_type)
+    if normalized_target_type == "bill" or (target_type == "auto" and _looks_like_bill_identifier(target)):
+        timeline = await _build_bill_timeline(target, age=age)
+        if not timeline.get("bill"):
+            return timeline
+
+        nodes: dict[str, dict[str, Any]] = {}
+        edges: list[dict[str, Any]] = []
+        bill_data = timeline["bill"]
+        bill_node = _add_node(nodes, "bill", bill_data.get("BILL_NAME") or target, bill_id=bill_data.get("BILL_ID"))
+        if bill_data.get("CURR_COMMITTEE"):
+            committee_node = _add_node(nodes, "committee", bill_data["CURR_COMMITTEE"])
+            _add_edge(edges, bill_node, committee_node, "reviewed_by", {"source_tool": "get_bill_details"})
+        if bill_data.get("PRIMARY_PROPOSER") or bill_data.get("PROPOSER"):
+            member_node = _add_node(nodes, "member", bill_data.get("PRIMARY_PROPOSER") or bill_data["PROPOSER"])
+            _add_edge(edges, member_node, bill_node, "proposed", {"source_tool": "get_bill_details"})
+        for event in timeline.get("events", []):
+            event_node = _add_node(
+                nodes, "event", f"{event['event_type']} {event['date']}", event_type=event["event_type"]
+            )
+            _add_edge(
+                edges, bill_node, event_node, "has_event", {"source_tool": event["source_tool"], "date": event["date"]}
+            )
+
+        return {
+            "target": target,
+            "target_type": "bill",
+            "nodes": list(nodes.values()),
+            "edges": edges,
+            "mermaid": _mermaid_graph(nodes, edges),
+            "top_followups": [
+                {
+                    "tool": "verify_legislative_claims",
+                    "citations_or_text": json.dumps({"type": "bill", "value": target}),
+                }
+            ],
+            "warnings": timeline.get("warnings", []),
+        }
+
+    brief = await _build_issue_brief(target, age=age, limit=limit)
+    nodes = {}
+    edges = []
+    topic_node = _add_node(nodes, "topic", target)
+
+    for bill in brief.get("bills", []):
+        bill_node = _add_node(nodes, "bill", bill.get("BILL_NAME") or bill.get("BILL_ID"), bill_id=bill.get("BILL_ID"))
+        _add_edge(edges, topic_node, bill_node, "matches_topic", {"source_tool": "search_bills", "keyword": target})
+        if bill.get("CURR_COMMITTEE"):
+            committee_node = _add_node(nodes, "committee", bill["CURR_COMMITTEE"])
+            _add_edge(edges, bill_node, committee_node, "reviewed_by", {"source_tool": "search_bills"})
+        if bill.get("PRIMARY_PROPOSER") or bill.get("PROPOSER"):
+            member_node = _add_node(nodes, "member", bill.get("PRIMARY_PROPOSER") or bill["PROPOSER"])
+            _add_edge(edges, member_node, bill_node, "proposed", {"source_tool": "search_bills"})
+
+    for report in brief.get("reports", []):
+        report_node = _add_node(
+            nodes, "report", report.get("title") or report.get("source"), source=report.get("source")
+        )
+        _add_edge(edges, topic_node, report_node, "has_report", {"source_tool": "get_legislative_reports"})
+
+    for vote in brief.get("voting_signal", []):
+        vote_node = _add_node(
+            nodes, "vote", vote.get("BILL_NAME") or vote.get("BILL_ID"), result=vote.get("PROC_RESULT_CD")
+        )
+        related_bill = next((b for b in brief.get("bills", []) if b.get("BILL_ID") == vote.get("BILL_ID")), None)
+        if related_bill:
+            bill_node = _node_id("bill", related_bill.get("BILL_NAME") or related_bill.get("BILL_ID"))
+            _add_edge(edges, bill_node, vote_node, "has_vote", {"source_tool": "get_bill_voting_results"})
+
+    return {
+        "target": target,
+        "target_type": "topic",
+        "nodes": list(nodes.values()),
+        "edges": edges,
+        "mermaid": _mermaid_graph(nodes, edges),
+        "top_followups": brief.get("follow_up", [])[:5],
+        "warnings": brief.get("warnings", []),
+    }
+
+
+@mcp.tool()
+async def watch_action_plan(topic: str, age: str = "22", limit: int = 5) -> dict[str, Any]:
+    """
+    특정 입법 주제의 변화를 추적하기 위한 실행 계획과 다음 MCP 호출 목록을 생성합니다.
+
+    법률 자문이 아니라 국회 공개데이터 모니터링 절차를 반환합니다.
+    """
+    brief = await _build_issue_brief(topic, age=age, limit=limit)
+    committees = brief.get("committees", [])
+    bills = brief.get("bills", [])
+
+    next_calls: list[dict[str, Any]] = [
+        {"tool": "issue_brief", "topic": topic, "age": age, "limit": limit},
+        {"tool": "search_bills", "keyword": topic, "age": age, "limit": limit},
+    ]
+    next_calls.extend({"tool": "bill_timeline", "bill_id": bill.get("BILL_ID"), "age": age} for bill in bills[:3])
+    next_calls.extend({"tool": "search_meetings", "committee_name": name, "limit": limit} for name in committees[:3])
+    next_calls.append({"tool": "get_plenary_schedule", "unit_cd": age, "limit": limit})
+
+    return {
+        "topic": topic,
+        "assembly_age": age,
+        "monitoring_scope": {
+            "matched_bills": len(bills),
+            "matched_committees": committees,
+            "latest_bill_ids": [bill.get("BILL_ID") for bill in bills[:5] if bill.get("BILL_ID")],
+        },
+        "plan": [
+            {
+                "step": 1,
+                "name": "Normalize topic keywords",
+                "action": "Use the exact Korean policy term plus known synonyms when search_bills returns [NOT_FOUND].",
+                "tool_calls": [{"tool": "get_legislative_research_kit"}],
+            },
+            {
+                "step": 2,
+                "name": "Track newly filed and status-changed bills",
+                "action": "Run search_bills for the topic and compare BILL_ID, PROC_STATUS, CURR_COMMITTEE, PROC_DT.",
+                "tool_calls": [{"tool": "search_bills", "keyword": topic, "age": age, "limit": limit}],
+            },
+            {
+                "step": 3,
+                "name": "Track committee agenda movement",
+                "action": "For matched committees, query meeting schedules and bill timelines.",
+                "tool_calls": next_calls[2 : 2 + min(6, len(next_calls))],
+            },
+            {
+                "step": 4,
+                "name": "Track plenary and vote signals",
+                "action": "Check plenary schedule and voting summaries for bills that reached final disposition.",
+                "tool_calls": [{"tool": "get_plenary_schedule", "unit_cd": age, "limit": limit}],
+            },
+            {
+                "step": 5,
+                "name": "Verify claims before publishing",
+                "action": "Pass final bill/member/committee/vote claims through verify_legislative_claims.",
+                "tool_calls": [{"tool": "verify_legislative_claims", "citations_or_text": "JSON claims"}],
+            },
+        ],
+        "next_tool_calls": next_calls,
+        "warnings": brief.get("warnings", []),
+    }
 
 
 @mcp.tool()
